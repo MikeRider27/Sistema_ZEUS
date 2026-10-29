@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head(${mov.titulo})}"></head>
+<body class="ventana">
+<fieldset class="etched" id="panAbrir" hidden>
+    <legend>Apertura de Caja</legend>
+    <div class="fila">
+        <label for="cboCaj" class="req">Caja</label><select id="cboCaj"></select>
+        <label for="txtMonto">Monto Inicial</label><input type="text" id="txtMonto" class="num solo-num" size="12" value="0">
+        <button type="button" class="btn" id="btnAbrir"><img src="/img/caja.png" alt="">Abrir Caja</button>
+    </div>
+</fieldset>
+<fieldset class="etched" id="panCerrar" hidden>
+    <legend>Caja Abierta</legend>
+    <div class="form-grid">
+        <label>Caja</label><input type="text" id="lblCaja" disabled>
+        <label>Abierta el</label><input type="text" id="lblFecha" disabled>
+        <label>Monto Inicial</label><input type="text" id="lblIni" class="num" disabled>
+        <label>Total Cobrado</label><input type="text" id="lblCob" class="num" disabled>
+        <label>Saldo Teórico</label><input type="text" id="lblSaldo" class="num" disabled>
+        <span></span><button type="button" class="btn" id="btnCerrar"><img src="/img/cashbox.png" alt="">Cerrar Caja</button>
+    </div>
+</fieldset>
+<div class="etched" th:insert="~{fragments :: filtros('ABI:Abiertas,CER:Cerradas')}"></div>
+<div class="tabla-wrap">
+    <table class="grilla" id="tLista">
+        <thead><tr><th>Codigo</th><th>Caja</th><th>Cajero</th><th>Apertura</th><th>Monto Inicial</th><th>Cierre</th><th>Monto Cierre</th><th>Cobrado</th><th>Estado</th></tr></thead>
+        <tbody></tbody>
+    </table>
+</div>
+<div class="tabla-wrap chica">
+    <table class="grilla" id="tListaDet"><thead><tr><th>Cobro Nº</th><th>Factura Nº</th><th>Cliente</th><th>Fecha</th><th>Monto</th><th>Estado</th></tr></thead><tbody></tbody></table>
+</div>
+<div class="botonera">
+    <button type="button" class="btn" id="btnExit" onclick="Z.salir()"><img src="/img/salir.png" alt="">Salir</button>
+</div>
+<script>
+(function () {
+    const { $ } = Z;
+    let mia = null;
+    const leer = Z.filtros(cargarLista);
+
+    async function estadoCaja() {
+        const r = await Z.q('ape_mia');
+        mia = r && r[0];
+        $('#panAbrir').hidden = !!mia;
+        $('#panCerrar').hidden = !mia;
+        if (mia) {
+            $('#lblCaja').value = mia.caj_des;
+            $('#lblFecha').value = mia.date_;
+            $('#lblIni').value = Z.fmtNum(mia.ape_monto);
+            $('#lblCob').value = Z.fmtNum(mia.cobrado);
+            $('#lblSaldo').value = Z.fmtNum(Number(mia.ape_monto) + Number(mia.cobrado));
+        }
+    }
+    async function cargarLista() {
+        const rows = await Z.q('ape_lista', leer());
+        Z.tabla('#tLista', rows || [], [{ c: 'ape_cod', f: 'n' }, { c: 'caj_des' }, { c: 'emp' }, { c: 'date_' }, { c: 'ape_monto', f: 'n' },
+            { c: 'cie_date_' }, { c: 'cie_monto', f: 'n' }, { c: 'cobrado', f: 'n' }, { c: 'est_cod' }],
+            { onSel: async r => Z.tabla('#tListaDet', await Z.q('ape_det', { cod: r.ape_cod }) || [],
+                [{ c: 'cob_cod', f: 'n' }, { c: 'fact_nro' }, { c: 'cliente' }, { c: 'date_' }, { c: 'total', f: 'n' }, { c: 'est_cod' }],
+                { vacio: 'Sin cobros' }) });
+        Z.tabla('#tListaDet', [], [{}], { vacio: 'Seleccione una apertura' });
+    }
+    async function refrescar() { await estadoCaja(); await cargarLista(); }
+
+    $('#btnAbrir').onclick = async () => {
+        if (!$('#cboCaj').value) { await Z.msg('Seleccione la Caja'); return; }
+        const r = await Z.post('/mov/ape/save', { ban: 1, cab: { caj_cod: $('#cboCaj').value, monto: Z.num($('#txtMonto').value) } });
+        if (r) { await Z.msg('Caja abierta con Éxito', 'Mensaje', 'info'); refrescar(); }
+    };
+    $('#btnCerrar').onclick = async () => {
+        const arqueo = await Z.prompt('Ingrese el monto contado en caja (arqueo).\nSaldo teórico: ' + $('#lblSaldo').value, 'Cierre de Caja');
+        if (arqueo === null) return;
+        const dif = Z.num(arqueo) - (Number(mia.ape_monto) + Number(mia.cobrado));
+        if (dif !== 0 && !(await Z.confirm(`Hay una diferencia de ${Z.fmtNum(dif)} con el saldo teórico.\n¿Desea cerrar la caja de todas formas?`))) return;
+        const r = await Z.post('/mov/ape/save', { ban: 4, cod: mia.ape_cod, cab: { monto: Z.num(arqueo) } });
+        if (r) { await Z.msg('Caja cerrada con Éxito', 'Mensaje', 'info'); refrescar(); }
+    };
+    $('#btnRefrescar').onclick = refrescar;
+
+    Z.cargarCombo('#cboCaj', 'cbo_caj');
+    $('#fMes').value = '';  // por defecto todas las aperturas del año
+    refrescar();
+})();
+</script>
+</body>
+</html>

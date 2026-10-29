@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head(${mov.titulo})}"></head>
+<body class="ventana">
+<div class="tabs" id="tabs">
+    <div class="tab-bar"><button type="button">Edicion</button><button type="button">Listado</button></div>
+    <div class="tab-body">
+        <div class="tab-panel" id="edicion">
+            <div class="etched form-grid">
+                <label for="txtCod">Codigo</label><input type="text" id="txtCod" class="cod" disabled>
+                <label for="txtRes">Resultado</label><input type="text" id="txtRes" disabled>
+                <label for="cboOt" class="req">O.T. en proceso</label><select id="cboOt" class="ancho"></select>
+            </div>
+            <div class="ayuda">Califique cada paso de 1 (malo) a 5 (excelente). El control se APRUEBA si todos los pasos tienen 3 o más;
+                al aprobarse la O.T. queda TERMINADA y puede facturarse.</div>
+            <div class="tabla-wrap">
+                <table class="grilla" id="tDet"><thead><tr><th>#</th><th>Etapa</th><th>Paso Control</th><th>Calificacion</th></tr></thead><tbody></tbody></table>
+            </div>
+            <div class="fila"><label for="txtObs">Observaciones</label><textarea id="txtObs" class="upper crece" rows="2" maxlength="500"></textarea></div>
+        </div>
+        <div class="tab-panel" id="listado">
+            <div class="etched" th:insert="~{fragments :: filtros('VIG:Vigentes,ANU:Anulados')}"></div>
+            <div class="tabla-wrap">
+                <table class="grilla" id="tLista">
+                    <thead><tr><th>#</th><th>O.T. Nº</th><th>Vehiculo</th><th>Fecha</th><th>Promedio</th><th>Resultado</th><th>Controlado por</th><th>Estado</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="tabla-wrap chica">
+                <table class="grilla" id="tListaDet"><thead><tr><th>Etapa</th><th>Paso Control</th><th>Calificacion</th></tr></thead><tbody></tbody></table>
+            </div>
+        </div>
+    </div>
+</div>
+<div th:replace="~{fragments :: botonera}"></div>
+
+<script th:inline="javascript">
+(function () {
+    const APROBADOR = /*[[${u.aprobador}]]*/ false;
+    const { $ } = Z;
+    let pasos = [];
+
+    function resultado() {
+        const ok = pasos.length && pasos.every(p => Number(p.cal) >= 3);
+        const falta = pasos.some(p => !p.cal);
+        $('#txtRes').value = falta ? 'PENDIENTE' : ok ? 'APROBADO' : 'OBSERVADO';
+    }
+    function pintar() {
+        Z.tabla('#tDet', pasos, [{ c: 'paso_cod', f: 'n' }, { c: 'paso_etapa' }, { c: 'paso_des' },
+            { html: r => { const s = document.createElement('select');
+                s.innerHTML = '<option value="">--</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>';
+                s.value = r.cal || ''; s.onchange = () => { r.cal = s.value; resultado(); }; return s; } }]);
+        resultado();
+    }
+
+    Z.mov({
+        key: 'cc',
+        sinAgregar: !APROBADOR,
+        lista: { q: 'cc_lista', tabla: '#tLista', cod: 'cc_cod',
+            cols: [{ c: 'cc_cod', f: 'n' }, { c: 'ot_cod', f: 'n' }, { c: 'veh' }, { c: 'date_' }, { c: 'promedio', f: 'n' },
+                   { c: 'cc_res' }, { c: 'emp' }, { c: 'est_cod' }] },
+        det: { q: 'cc_det', tabla: '#tListaDet', cols: [{ c: 'paso_etapa' }, { c: 'paso_des' }, { c: 'det_cal', f: 'n' }] },
+        puedeAnular: r => r.est_cod === 'VIG' && APROBADOR,
+        async nuevo() {
+            $('#txtCod').value = '(automático)';
+            await Z.cargarCombo('#cboOt', 'ot_en_proceso');
+            pasos = (await Z.q('pasos')) || [];
+            pintar();
+            $('#cboOt').focus();
+        },
+        limpiar() { pasos = []; pintar(); },
+        async guardar() {
+            if (!(await Z.requeridos($('#edicion')))) return null;
+            if (pasos.some(p => !p.cal)) { await Z.msg('Debe calificar todos los pasos de control'); return null; }
+            const apr = pasos.every(p => Number(p.cal) >= 3);
+            if (!(await Z.confirm(apr ? 'El control resulta APROBADO y la O.T. quedará TERMINADA.\n¿Desea continuar?'
+                                      : 'El control resulta OBSERVADO; la O.T. seguirá en proceso.\n¿Desea continuar?'))) return null;
+            return { cab: { ot_cod: $('#cboOt').value, cc_obs: $('#txtObs').value },
+                     det: pasos.map(p => ({ paso_cod: p.paso_cod, cal: Number(p.cal) })) };
+        }
+    });
+})();
+</script>
+</body>
+</html>

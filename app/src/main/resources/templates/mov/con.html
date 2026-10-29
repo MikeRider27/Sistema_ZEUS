@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head(${mov.titulo})}"></head>
+<body class="ventana">
+<div class="etched form-grid">
+    <label for="cboOt" class="req">O.T. en proceso</label><select id="cboOt" class="ancho"></select>
+</div>
+<fieldset class="etched" id="panRetiro" disabled>
+    <legend>Retiro de insumos del deposito</legend>
+    <div class="form-grid">
+        <label for="cboMat" class="req">Material</label><select id="cboMat"></select>
+        <label for="cboDep" class="req">Deposito</label><select id="cboDep"></select>
+        <label for="cboEmp" class="req">Funcionario que retira</label><select id="cboEmp"></select>
+        <label for="txtExist">Existencia</label><input type="text" id="txtExist" class="num" disabled>
+        <label for="txtCant" class="req">Cantidad</label>
+        <div class="fila"><input type="text" id="txtCant" class="num solo-num" size="8"><span id="lblUn"></span><span class="enter">&lt;ENTER&gt;</span></div>
+    </div>
+</fieldset>
+<div class="tabla-wrap">
+    <table class="grilla" id="tLista">
+        <thead><tr><th>#</th><th>Material</th><th>Deposito</th><th>Funcionario que retiro</th><th>Fecha y Hora</th><th>Cantidad</th><th>Medida</th><th>Cant. Acum.</th><th>Estado</th></tr></thead>
+        <tbody></tbody>
+    </table>
+</div>
+<div class="botonera">
+    <button type="button" class="btn" id="btnAdd"><img src="/img/agregar.png" alt="">Registrar Retiro</button>
+    <button type="button" class="btn" id="btnNull" disabled><img src="/img/anular.png" alt="">Anular</button>
+    <button type="button" class="btn" id="btnExit" onclick="Z.salir()"><img src="/img/salir.png" alt="">Salir</button>
+</div>
+<script>
+(function () {
+    const { $ } = Z;
+    let sel = null;
+
+    async function cargarTabla() {
+        sel = null;
+        $('#btnNull').disabled = true;
+        $('#panRetiro').disabled = !$('#cboOt').value;
+        $('#btnAdd').disabled = !$('#cboOt').value;
+        const rows = $('#cboOt').value ? await Z.q('con_lista', { ot: $('#cboOt').value }) : [];
+        Z.tabla('#tLista', rows || [], [{ c: 'con_cod', f: 'n' }, { c: 'mat' }, { c: 'dep' }, { c: 'emp' }, { c: 'date_' },
+            { c: 'con_cant', f: 'n' }, { c: 'un_cod' }, { c: 'acum', f: 'n' }, { c: 'est_cod' }],
+            { vacio: $('#cboOt').value ? 'La O.T. no tiene retiros registrados' : 'Seleccione una O.T.',
+              onSel: r => { sel = r; $('#btnNull').disabled = r.est_cod !== 'VIG'; } });
+    }
+    async function existencia() {
+        const mat = Z.filaCombo('#cboMat');
+        $('#lblUn').textContent = mat ? mat.un_cod : '';
+        $('#txtExist').value = '';
+        if (!$('#cboMat').value || !$('#cboDep').value) return;
+        const r = await Z.q('stock_uno', { mat: $('#cboMat').value, dep: $('#cboDep').value });
+        if (r && r[0]) $('#txtExist').value = Z.fmtNum(r[0].cant);
+    }
+    async function registrar() {
+        if (!(await Z.requeridos())) return;
+        const cant = Z.num($('#txtCant').value);
+        if (cant <= 0) { await Z.msg('La cantidad debe ser mayor a cero'); return; }
+        if (cant > Z.num($('#txtExist').value)) { await Z.msg('La cantidad supera la existencia del depósito'); return; }
+        const r = await Z.post('/mov/con/save', { ban: 1, cab: { ot_cod: $('#cboOt').value, mat_cod: $('#cboMat').value,
+            dep_cod: $('#cboDep').value, emp_ret: $('#cboEmp').value, cant } });
+        if (!r) return;
+        $('#txtCant').value = '';
+        await existencia();
+        await cargarTabla();
+        $('#cboMat').focus();
+    }
+
+    $('#cboOt').onchange = cargarTabla;
+    $('#cboMat').onchange = existencia;
+    $('#cboDep').onchange = existencia;
+    $('#btnAdd').onclick = registrar;
+    $('#txtCant').addEventListener('keydown', e => { if (e.key === 'Enter') registrar(); });
+    $('#btnNull').onclick = async () => {
+        if (!sel || !(await Z.confirm('¿Desea Anular este retiro?\nLa cantidad volverá al stock del depósito.'))) return;
+        if (await Z.post('/mov/con/save', { ban: 3, cod: sel.con_cod })) { await Z.msg('Registro Anulado con Éxito', 'Mensaje', 'info'); existencia(); cargarTabla(); }
+    };
+
+    Z.cargarCombo('#cboOt', 'ot_en_proceso').then(cargarTabla);
+    Z.cargarCombo('#cboMat', 'cbo_mat');
+    Z.cargarCombo('#cboDep', 'cbo_dep');
+    Z.cargarCombo('#cboEmp', 'cbo_func_suc');
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head(${mov.titulo})}"></head>
+<body class="ventana">
+<div class="tabs" id="tabs">
+    <div class="tab-bar"><button type="button">Edicion</button><button type="button">Listado</button></div>
+    <div class="tab-body">
+        <div class="tab-panel" id="edicion">
+            <div class="etched form-grid">
+                <label for="txtCod">O.T. Nº</label><input type="text" id="txtCod" class="cod" disabled>
+                <label for="txtFin">F. estimada de entrega</label><input type="date" id="txtFin">
+                <label for="txtVeh">Vehiculo</label><input type="text" id="txtVeh" class="ancho" disabled>
+                <label for="txtObs">Indicaciones</label><textarea id="txtObs" class="upper ancho" rows="2" maxlength="500"></textarea>
+            </div>
+            <div class="ayuda">Asigne cada pieza del presupuesto al funcionario (chapero, pintor, etc.) que la trabajará.</div>
+            <div class="tabla-wrap">
+                <table class="grilla" id="tDet"><thead><tr><th>Pieza</th><th>Funcionario</th></tr></thead><tbody></tbody></table>
+            </div>
+        </div>
+        <div class="tab-panel" id="listado">
+            <div class="etched" th:insert="~{fragments :: filtros('VIG:En Proceso,TER:Terminadas,ENT:Entregadas')}"></div>
+            <div class="tabla-wrap">
+                <table class="grilla" id="tLista">
+                    <thead><tr><th>#</th><th>Presupuesto</th><th>Cia. de Seguro</th><th>Vehiculo</th><th>Asegurado</th><th>Fecha</th><th>Entrega Est.</th><th>Total</th><th>Estado</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="tabla-wrap chica">
+                <table class="grilla" id="tListaDet"><thead><tr><th>Pieza</th><th>Funcionario</th><th>Cargo</th><th>Estado</th></tr></thead><tbody></tbody></table>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="botonera">
+    <div class="izq">
+        <button type="button" class="btn" id="btnAsignar"><img src="/img/empleado.png" alt="">Asignar</button>
+        <button type="button" class="btn" id="btnPrint"><img src="/img/informe.png" alt="">Emitir (Imprimir)</button>
+    </div>
+    <button type="button" class="btn" id="btnSave"><img src="/img/guardar.png" alt="">Guardar</button>
+    <button type="button" class="btn" id="btnCancel"><img src="/img/cancelar.png" alt="">Cancelar</button>
+    <button type="button" class="btn" id="btnExit"><img src="/img/salir.png" alt="">Salir</button>
+</div>
+
+<!-- hoja de la O.T. interna para imprimir -->
+<div id="hoja" class="hoja" hidden></div>
+<style>@media print { body.ventana > :not(#hoja) { display: none !important; } #hoja { display: block !important; } }</style>
+
+<script>
+(function () {
+    const { $ } = Z;
+    let det = [], funcs = [];
+
+    function pintar() {
+        Z.tabla('#tDet', det, [{ c: 'pie_des' },
+            { html: r => { const s = document.createElement('select'); Z.combo(s, funcs, '-- SIN ASIGNAR --'); s.value = r.emp_ci || '';
+                s.onchange = () => r.emp_ci = s.value; return s; } }], { vacio: 'La O.T. no tiene piezas' });
+    }
+
+    const m = Z.mov({
+        key: 'oti',
+        sinAgregar: true,
+        lista: { q: 'ot_lista', tabla: '#tLista', cod: 'ot_cod',
+            cols: [{ c: 'ot_cod', f: 'n' }, { c: 'prep_cod', f: 'n' }, { c: 'seg_des' }, { c: 'veh' }, { c: 'cli' }, { c: 'date_' },
+                   { c: 'fin' }, { c: 'total', f: 'n' }, { c: 'est_cod' }] },
+        det: { q: 'ot_det', tabla: '#tListaDet', cols: [{ c: 'pie_des' }, { c: 'emp' }, { c: 'car_des' }, { c: 'est_cod' }] },
+        puedeAnular: () => false,
+        acciones: [{ btn: '#btnAsignar', puede: r => r.est_cod === 'VIG' }, { btn: '#btnPrint', puede: r => r.est_cod !== 'ANU' }],
+        limpiar() { det = []; pintar(); },
+        async guardar() {
+            const asig = det.filter(d => d.emp_ci);
+            if (!asig.length) { await Z.msg('Asigne al menos una pieza a un funcionario'); return null; }
+            return { cab: { ot_fin: $('#txtFin').value || null, ot_obs: $('#txtObs').value },
+                     det: asig.map(d => ({ pie_cod: d.cod, emp_ci: d.emp_ci })), mensaje: 'Asignación guardada con Éxito' };
+        }
+    });
+
+    $('#btnAsignar').onclick = async () => {
+        const r = m.sel;
+        const [pzas, asig, cab] = await Promise.all([Z.q('ot_pie', { cod: r.ot_cod }), Z.q('ot_det', { cod: r.ot_cod }), Z.q('ot_uno', { cod: r.ot_cod })]);
+        if (!pzas || !asig || !cab || !cab[0]) return;
+        m.editar(2);
+        $('#txtCod').value = r.ot_cod;
+        $('#txtVeh').value = r.veh + ' - ' + r.cli;
+        $('#txtFin').value = cab[0].ot_fin || '';
+        $('#txtObs').value = cab[0].ot_obs || '';
+        det = pzas.map(p => ({ cod: p.cod, pie_des: p.des, emp_ci: (asig.find(a => a.pie_cod === p.cod) || {}).emp_ci }));
+        pintar();
+    };
+
+    $('#btnPrint').onclick = async () => {
+        const r = m.sel;
+        const asig = await Z.q('ot_det', { cod: r.ot_cod }) || [];
+        const h = $('#hoja');
+        h.innerHTML = `<h2>ORDEN DE TRABAJO INTERNA Nº <span id="pOt"></span></h2><div class="sub" id="pSub"></div>
+            <table class="grilla"><thead><tr><th>Pieza</th><th>Funcionario</th><th>Cargo</th><th>Firma</th></tr></thead><tbody></tbody></table>`;
+        $('#pOt', h).textContent = r.ot_cod;
+        $('#pSub', h).textContent = `${r.veh} - ${r.cli} - ${r.seg_des} - Emitida: ${r.date_} - Entrega estimada: ${r.fin || '-'}`;
+        Z.tabla(h.querySelector('table'), asig, [{ c: 'pie_des' }, { c: 'emp' }, { c: 'car_des' }, { html: () => '&nbsp;' }], { vacio: 'Sin asignaciones' });
+        window.print();
+    };
+
+    Z.q('cbo_func_suc').then(r => funcs = r || []);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head('Resumen de Movimientos')}"></head>
+<body class="ventana">
+<div class="etched barra-filtro no-print">
+    <label for="fMes">Mes</label><select id="fMes"></select>
+    <label for="fAnho">Año</label><select id="fAnho"></select>
+</div>
+<div class="hoja">
+    <h2>RESUMEN DE MOVIMIENTOS DEL MES</h2>
+    <div class="sub" id="sub"></div>
+    <table class="grilla" id="tInf"><thead><tr><th>Movimiento</th><th>Cantidad</th><th>Importe Total</th></tr></thead><tbody></tbody></table>
+</div>
+<div class="botonera no-print">
+    <button type="button" class="btn" onclick="window.print()"><img src="/img/informe.png" alt="">Imprimir</button>
+    <button type="button" class="btn" id="btnExit" onclick="Z.salir()"><img src="/img/salir.png" alt="">Salir</button>
+</div>
+<script>
+(function () {
+    const { $ } = Z;
+    const leer = Z.filtros(generar);
+    $('#fMes').querySelector('option[value=""]').remove();
+    $('#fAnho').querySelector('option[value=""]').remove();
+    async function generar() {
+        const f = leer();
+        const rows = await Z.q('inf_mov_mes', { mes: f.mes, anho: f.anho }) || [];
+        Z.tabla('#tInf', rows, [{ c: 'mov' }, { c: 'cant', f: 'n' }, { c: 'total', f: 'n' }]);
+        $('#sub').textContent = `${Z.MESES[f.mes - 1]} de ${f.anho} - Todas las sucursales - Emitido el ${new Date().toLocaleString('es-PY')}`;
+    }
+    generar();
+})();
+</script>
+</body>
+</html>

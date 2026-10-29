@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head(${mov.titulo})}"></head>
+<body class="ventana">
+<div class="etched barra-filtro">
+    <label for="txtBuscar">Material</label><input type="text" id="txtBuscar" class="upper crece">
+    <span class="enter">&lt;ENTER&gt;</span>
+    <label for="cboFilter">en</label><select id="cboFilter"></select>
+</div>
+<div class="tabla-wrap">
+    <table class="grilla" id="tLista">
+        <thead><tr><th>Material</th><th>Sucursal</th><th>Deposito</th><th>U. de Medida</th><th>Exist. Min.</th><th>Existencia</th><th>Exist. No Disp.</th></tr></thead>
+        <tbody></tbody>
+    </table>
+</div>
+<div class="botonera">
+    <div class="izq ayuda">En rojo: materiales con existencia igual o menor a la mínima. "No Disp." = en tránsito por remisión.</div>
+    <button type="button" class="btn" id="btnExit" onclick="Z.salir()"><img src="/img/salir.png" alt="">Salir</button>
+</div>
+<script>
+(function () {
+    const { $ } = Z;
+    async function cargarTabla() {
+        const rows = await Z.q('stock', { q: $('#txtBuscar').value, suc: $('#cboFilter').value });
+        if (rows) Z.tabla('#tLista', rows, [{ c: 'mat_des' }, { c: 'suc_des' }, { c: 'dep_des' }, { c: 'un_cod' },
+            { c: 'mat_min', f: 'n' }, { c: 'cant', f: 'n' }, { c: 'cant_no_disp', f: 'n' }],
+            { claseFila: r => r.bajo_min ? 'bajo' : '', onSel: () => {} });
+    }
+    $('#txtBuscar').addEventListener('keydown', e => { if (e.key === 'Enter') cargarTabla(); });
+    $('#cboFilter').onchange = cargarTabla;
+    Z.cargarCombo('#cboFilter', 'cbo_suc_otras', {}, 'Esta Sucursal').then(cargarTabla);
+})();
+</script>
+</body>
+</html>

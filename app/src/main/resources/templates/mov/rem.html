@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head(${mov.titulo})}"></head>
+<body class="ventana">
+<div class="tabs" id="tabs">
+    <div class="tab-bar"><button type="button">Edicion</button><button type="button">Listado</button></div>
+    <div class="tab-body">
+        <div class="tab-panel" id="edicion">
+            <div class="etched form-grid">
+                <label for="txtCod">Codigo</label><input type="text" id="txtCod" class="cod" disabled>
+                <label for="txtSuc_o">Sucursal Origen</label><input type="text" id="txtSuc_o" disabled th:value="${u.suc}">
+                <label for="cboSuc" class="req">Sucursal Destino</label><select id="cboSuc"></select>
+                <label for="cboResp" class="req">Responsable del Traslado</label><select id="cboResp"></select>
+            </div>
+            <fieldset class="etched">
+                <legend>Materiales a remitir</legend>
+                <div class="form-grid">
+                    <label for="cboMat">Material</label><select id="cboMat"></select>
+                    <label for="cboDepO">Dep. Origen</label><select id="cboDepO"></select>
+                    <label for="cboDepD">Dep. Destino</label><select id="cboDepD"></select>
+                    <label for="txtExist">Existencia</label><input type="text" id="txtExist" class="num" disabled>
+                    <label for="txtCant">Cantidad</label>
+                    <div class="fila"><input type="text" id="txtCant" class="num solo-num" size="8"><span class="enter">&lt;ENTER&gt;</span></div>
+                </div>
+            </fieldset>
+            <div class="tabla-wrap">
+                <table class="grilla" id="tDet">
+                    <thead><tr><th>Cantidad</th><th>Material</th><th>Dep. Origen</th><th>Dep. Destino</th><th></th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="tab-panel" id="listado">
+            <div class="etched" th:insert="~{fragments :: filtros('VIG:En Transito,REC:Recibidas,ANU:Anuladas')}"></div>
+            <div class="tabla-wrap">
+                <table class="grilla" id="tLista">
+                    <thead><tr><th>Codigo</th><th>Fecha</th><th>Sucursal Origen</th><th>Sucursal Destino</th><th>Responsable</th><th>Estado</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="tabla-wrap chica">
+                <table class="grilla" id="tListaDet">
+                    <thead><tr><th>Cantidad</th><th>Material</th><th>Deposito Origen</th><th>Deposito Destino</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="botonera">
+    <div class="izq"><button type="button" class="btn" id="btnRecibir"><img src="/img/guardar.png" alt="">Recibir</button></div>
+    <button type="button" class="btn" id="btnAdd"><img src="/img/agregar.png" alt="">Agregar</button>
+    <button type="button" class="btn" id="btnNull"><img src="/img/anular.png" alt="">Anular</button>
+    <button type="button" class="btn" id="btnSave"><img src="/img/guardar.png" alt="">Guardar</button>
+    <button type="button" class="btn" id="btnCancel"><img src="/img/cancelar.png" alt="">Cancelar</button>
+    <button type="button" class="btn" id="btnExit"><img src="/img/salir.png" alt="">Salir</button>
+</div>
+
+<script th:inline="javascript">
+(function () {
+    const SUC = /*[[${u.sucCod}]]*/ 0;
+    const { $ } = Z;
+    let det = [];
+
+    function pintar() {
+        Z.tabla('#tDet', det, [
+            { c: 'cant', f: 'n' }, { c: 'mat' }, { c: 'dep_o_des' }, { c: 'dep_d_des' },
+            { html: (r, i) => { const b = Object.assign(document.createElement('button'), { type: 'button', className: 'btn chico', textContent: 'Quitar' });
+                b.onclick = () => { det.splice(i, 1); pintar(); }; return b; } }
+        ], { vacio: 'Agregue materiales a remitir' });
+        $('#cboSuc').disabled = det.length > 0;   // no cambiar destino con detalles cargados
+    }
+
+    async function existencia() {
+        $('#txtExist').value = '';
+        if (!$('#cboMat').value || !$('#cboDepO').value) return;
+        const r = await Z.q('stock_uno', { mat: $('#cboMat').value, dep: $('#cboDepO').value });
+        if (r && r[0]) $('#txtExist').value = Z.fmtNum(r[0].cant);
+    }
+
+    async function agregar() {
+        const mat = Z.filaCombo('#cboMat'), o = Z.filaCombo('#cboDepO'), d = Z.filaCombo('#cboDepD');
+        const cant = Z.num($('#txtCant').value);
+        if (!$('#cboSuc').value) { await Z.msg('Seleccione la Sucursal Destino'); return $('#cboSuc').focus(); }
+        if (!mat || !o || !d) { await Z.msg('Seleccione Material, Depósito Origen y Depósito Destino'); return; }
+        if (cant <= 0) { await Z.msg('La cantidad debe ser mayor a cero'); return $('#txtCant').focus(); }
+        if (cant > Z.num($('#txtExist').value)) { await Z.msg('La cantidad supera la existencia del depósito de origen'); return; }
+        if (det.some(x => x.mat_cod === mat.cod && x.dep_o === o.cod)) { await Z.msg('El material ya fue agregado desde ese depósito'); return; }
+        det.push({ mat_cod: mat.cod, mat: mat.des, dep_o: o.cod, dep_o_des: o.des, dep_d: d.cod, dep_d_des: d.des, cant });
+        pintar();
+        $('#txtCant').value = '';
+        $('#cboMat').focus();
+    }
+
+    $('#cboSuc').onchange = () => $('#cboSuc').value
+        ? Z.cargarCombo('#cboDepD', 'cbo_dep', { suc: $('#cboSuc').value }) : Z.combo('#cboDepD', [], '-- ELEGIR --');
+    $('#cboMat').onchange = existencia;
+    $('#cboDepO').onchange = existencia;
+    $('#txtCant').addEventListener('keydown', e => { if (e.key === 'Enter') agregar(); });
+
+    const m = Z.mov({
+        key: 'rem',
+        lista: { q: 'rem_lista', tabla: '#tLista', cod: 'rem_cod',
+            cols: [{ c: 'rem_cod', f: 'n' }, { c: 'date_' }, { c: 'suc_o_des' }, { c: 'suc_d_des' }, { c: 'resp' }, { c: 'est_cod' }] },
+        det: { q: 'rem_det', tabla: '#tListaDet', cols: [{ c: 'det_cant', f: 'n' }, { c: 'mat' }, { c: 'dep_o_des' }, { c: 'dep_d_des' }] },
+        // solo la sucursal de origen anula; solo la de destino recibe
+        puedeAnular: r => r.est_cod === 'VIG' && r.suc_o === SUC,
+        acciones: [{ btn: '#btnRecibir', puede: r => r.est_cod === 'VIG' && r.suc_d === SUC }],
+        nuevo() { $('#txtCod').value = '(automático)'; det = []; pintar(); $('#cboSuc').focus(); },
+        limpiar() { det = []; pintar(); Z.combo('#cboDepD', [], '-- ELEGIR --'); },
+        async guardar() {
+            if (!(await Z.requeridos($('#edicion')))) return null;
+            if (!det.length) { await Z.msg('No se puede guardar una Remisión sin detalles'); return null; }
+            return { cab: { suc_d: $('#cboSuc').value, emp_resp: $('#cboResp').value },
+                     det: det.map(d => ({ mat_cod: d.mat_cod, dep_o: d.dep_o, dep_d: d.dep_d, cant: d.cant })) };
+        }
+    });
+    $('#btnRecibir').onclick = async () => {
+        if (!(await Z.confirm('¿Confirma la recepción de los materiales de esta remisión?\nSe sumarán al stock de los depósitos de destino.'))) return;
+        if (await m.ejecutar(4, m.sel.rem_cod, null, null, 'Remisión recibida con Éxito') !== null) m.terminar();
+    };
+    Z.cargarCombo('#cboSuc', 'cbo_suc_otras');
+    Z.cargarCombo('#cboResp', 'cbo_func_suc');
+    Z.cargarCombo('#cboMat', 'cbo_mat');
+    Z.cargarCombo('#cboDepO', 'cbo_dep');
+    Z.combo('#cboDepD', [], '-- ELEGIR --');
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head('Informes simples de Referenciales')}"></head>
+<body class="ventana">
+<div class="etched barra-filtro no-print">
+    <label for="cboRef">Referencial</label>
+    <select id="cboRef"><option th:each="r : ${refs}" th:value="${r.key}" th:text="${r.titulo.replace('Mantener ', '')}"></option></select>
+    <label for="cboSee">Ver</label>
+    <select id="cboSee"><option value="VIG">Vigentes</option><option value="ANU">Anulados</option></select>
+    <button type="button" class="btn chico" id="btnGen"><img src="/img/refresh.png" alt="">Generar</button>
+</div>
+<div class="hoja">
+    <h2 id="titulo"></h2>
+    <div class="sub" id="sub"></div>
+    <table class="grilla" id="tInf"><thead><tr></tr></thead><tbody></tbody></table>
+</div>
+<div class="botonera no-print">
+    <button type="button" class="btn" onclick="window.print()"><img src="/img/informe.png" alt="">Imprimir</button>
+    <button type="button" class="btn" id="btnExit" onclick="Z.salir()"><img src="/img/salir.png" alt="">Salir</button>
+</div>
+<script th:inline="javascript">
+(function () {
+    const REFS = /*[[${refs}]]*/ [];
+    const USR = /*[[${u.user}]]*/ '';
+    const { $ } = Z;
+    async function generar() {
+        const r = REFS.find(x => x.key === $('#cboRef').value);
+        const rows = await Z.get(`/ref/${r.key}/list`, { est: $('#cboSee').value }) || [];
+        const tr = $('#tInf thead tr'); tr.innerHTML = '';
+        r.cols.forEach(c => { const th = document.createElement('th'); th.textContent = c.titulo; tr.appendChild(th); });
+        Z.tabla('#tInf', rows, r.cols.map(c => ({ c: c.col, f: c.fmt })));
+        $('#titulo').textContent = 'LISTADO DE ' + r.titulo.replace('Mantener ', '').toUpperCase()
+            + ($('#cboSee').value === 'ANU' ? ' (ANULADOS)' : '');
+        $('#sub').textContent = `Emitido el ${new Date().toLocaleString('es-PY')} por ${USR} - ${rows.length} registro(s)`;
+    }
+    $('#btnGen').onclick = generar;
+    $('#cboRef').onchange = generar;
+    $('#cboSee').onchange = generar;
+    generar();
+})();
+</script>
+</body>
+</html>

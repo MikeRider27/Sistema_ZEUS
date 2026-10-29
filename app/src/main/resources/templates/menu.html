@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="_csrf" th:content="${_csrf.token}">
+    <meta name="_csrf_header" th:content="${_csrf.headerName}">
+    <title th:text="|Sistema ZEUS - ONLINE - ${u.user}, ${u.suc}|">Sistema ZEUS</title>
+    <link rel="icon" href="/img/logo.png">
+    <link rel="stylesheet" href="/css/zeus.css">
+    <script src="/js/zeus.js"></script>
+</head>
+<body class="escritorio" th:attr="data-bloqueo=${bloqueoMinutos}">
+
+<!-- items de menu (recursivo para los submenus) -->
+<th:block th:fragment="items(lista)">
+    <th:block th:each="i : ${lista}" th:unless="${i.soloAdmin and !u.admin}">
+        <hr th:if="${i.label == '-'}">
+        <div th:if="${i.label != '-' and i.submenu}" class="item sub">
+            <img th:src="|/img/${i.icono}.png|" alt=""><span th:text="${i.label}"></span>
+            <div class="pop"><th:block th:replace="~{::items(${i.items})}"></th:block></div>
+        </div>
+        <div th:if="${i.label != '-' and !i.submenu}" class="item" tabindex="-1"
+             th:attr="data-url=${i.url},data-titulo=${i.label},data-icono=${i.icono}">
+            <img th:if="${i.icono}" th:src="|/img/${i.icono}.png|" alt=""><span th:unless="${i.icono}" class="sin-ico"></span>
+            <span th:text="${i.label}"></span>
+        </div>
+    </th:block>
+</th:block>
+
+<nav class="menubar">
+    <div class="m" th:each="m : ${menu}">
+        <div class="m-titulo"><img th:src="|/img/${m.icono}.png|" alt=""><span th:text="${m.label}"></span></div>
+        <div class="pop"><th:block th:replace="~{::items(${m.items})}"></th:block></div>
+    </div>
+</nav>
+
+<main class="desktop" id="desktop">
+    <div class="marca">
+        <h1>ZEUS</h1>
+        <p>Sistema de Gestión de Taller de Chapería y Pintura</p>
+        <p th:text="|${u.emp} - ${u.cargo}|"></p>
+    </div>
+</main>
+
+<div class="taskbar" id="taskbar"></div>
+
+<footer class="statusbar">
+    <div th:text="|Usuario: ${u.user}|"></div>
+    <div th:text="|Sucursal: ${u.suc}|"></div>
+    <div class="crece">No olvide cerrar los Formularios al dejar de utilizarlos</div>
+    <div id="lblFecha"></div>
+</footer>
+
+<div class="bloqueo" id="bloqueo">
+    <div class="login-win">
+        <div class="t"><img src="/img/bloquear.png" alt=""> Bloqueo de Seguridad - Sistema ZEUS</div>
+        <div class="cuerpo">
+            <img class="logo" src="/img/logo_empresa.png" alt="">
+            <div style="flex:1">
+                <p th:text="|El sistema está bloqueado. Ingrese la contraseña de ${u.user} para continuar.|"></p>
+                <div class="form-grid una">
+                    <label for="txtDesbloqueo">Contraseña</label>
+                    <input type="password" id="txtDesbloqueo" autocomplete="off">
+                </div>
+            </div>
+        </div>
+        <div class="botonera" style="padding: 0 16px 14px">
+            <button type="button" class="btn" onclick="document.getElementById('frmLogout').submit()"><img src="/img/exit.png" alt="">Cerrar Sesión</button>
+            <button type="button" class="btn" id="btnDesbloquear"><img src="/img/sesion.png" alt="">Desbloquear</button>
+        </div>
+    </div>
+</div>
+
+<form id="frmLogout" method="post" th:action="@{/logout}" hidden></form>
+<script src="/js/escritorio.js"></script>
+</body>
+</html>

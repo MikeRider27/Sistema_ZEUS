@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head(${ref.titulo})}"></head>
+<body class="ventana">
+
+<div th:unless="${permitido}" class="etched">No posee los permisos necesarios para acceder a esta ventana.</div>
+
+<div class="tabs" id="tabs" th:if="${permitido}">
+    <div class="tab-bar"><button type="button">Edicion</button><button type="button">Listado</button></div>
+    <div class="tab-body">
+        <div class="tab-panel" id="edicion">
+            <div class="etched form-grid">
+                <label for="txtCod" th:classappend="${ref.codManual} ? 'req'" th:text="${ref.codLabel}">Codigo</label>
+                <input type="text" id="txtCod" class="cod" th:classappend="${ref.codManual} ? 'solo-num'" maxlength="10" disabled>
+                <span></span><span></span>
+                <th:block th:each="c : ${ref.campos}">
+                    <label th:for="|f_${c.col}|" th:text="${c.label}" th:classappend="${c.req} ? 'req'"
+                           th:unless="${c.tipo == 'b'}"></label>
+                    <select th:if="${c.tipo.startsWith('c')}" th:id="|f_${c.col}|" th:attr="data-combo=${c.combo},data-depende=${c.dependeDe}"></select>
+                    <input th:if="${c.tipo == 's'}" type="text" th:id="|f_${c.col}|" class="upper" th:maxlength="${c.max}">
+                    <input th:if="${c.tipo == 'p'}" type="password" th:id="|f_${c.col}|" th:maxlength="${c.max}" autocomplete="new-password"
+                           placeholder="(dejar vacío para no cambiar)">
+                    <input th:if="${c.tipo == 'i' or c.tipo == 'n'}" type="text" th:id="|f_${c.col}|" class="num solo-num" maxlength="15">
+                    <input th:if="${c.tipo == 'd'}" type="date" th:id="|f_${c.col}|">
+                    <th:block th:if="${c.tipo == 'b'}">
+                        <span></span>
+                        <label class="fila" style="justify-content:flex-start"><input type="checkbox" th:id="|f_${c.col}|">
+                            <span th:text="${c.label}"></span></label>
+                    </th:block>
+                </th:block>
+            </div>
+            <div class="ayuda">Los campos marcados con <span style="color:#c00">*</span> son obligatorios. &lt;ENTER&gt; en el último campo guarda.</div>
+        </div>
+        <div class="tab-panel" id="listado">
+            <div class="etched barra-filtro">
+                <label for="txtBuscar">Buscar</label>
+                <input type="text" id="txtBuscar" class="upper crece">
+                <span class="enter">&lt;ENTER&gt;</span>
+                <label for="cboSee">Ver</label>
+                <select id="cboSee"><option value="VIG">Vigentes</option><option value="ANU">Anulados</option></select>
+            </div>
+            <div class="tabla-wrap">
+                <table class="grilla" id="tLista">
+                    <thead><tr><th th:each="c : ${ref.cols}" th:text="${c.titulo}" th:style="|min-width:${c.ancho}px|"></th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="botonera" th:if="${permitido}">
+    <button type="button" class="btn" id="btnAdd"><img src="/img/agregar.png" alt="">Agregar</button>
+    <button type="button" class="btn" id="btnEdit"><img src="/img/editar.png" alt="">Editar</button>
+    <button type="button" class="btn" id="btnDelete"><img src="/img/anular.png" alt=""><span>Anular</span></button>
+    <button type="button" class="btn" id="btnSave"><img src="/img/guardar.png" alt="">Guardar</button>
+    <button type="button" class="btn" id="btnCancelar"><img src="/img/cancelar.png" alt="">Cancelar</button>
+    <button type="button" class="btn" id="btnExit"><img src="/img/salir.png" alt="">Salir</button>
+</div>
+<div class="botonera" th:unless="${permitido}">
+    <button type="button" class="btn" id="btnExit" onclick="Z.salir()"><img src="/img/salir.png" alt="">Salir</button>
+</div>
+
+<script th:if="${permitido}" th:inline="javascript">
+(function () {
+    const KEY = /*[[${ref.key}]]*/ 'marcas';
+    const COD_MANUAL = /*[[${ref.codManual}]]*/ false;
+    const COLS = /*[[${ref.cols}]]*/ [];
+    const CAMPOS = /*[[${ref.campos}]]*/ [];
+    const { $ } = Z;
+    const t = Z.tabs('#tabs');
+    const cols = COLS.map(c => ({ c: c.col, f: c.fmt }));
+    let bandera = 0, aop = null;
+
+    const campo = c => $('#f_' + c.col);
+
+    async function cargarCombos() {
+        for (const c of CAMPOS.filter(c => c.tipo.startsWith('c') && !c.dependeDe)) {
+            await Z.cargarCombo(campo(c), c.combo, {}, c.req ? '-- ELEGIR --' : '-- NINGUNO --');
+        }
+    }
+    // combos dependientes (ej. Barrio segun Ciudad)
+    CAMPOS.filter(c => c.dependeDe).forEach(c => {
+        const padre = $('#f_' + c.dependeDe);
+        padre.addEventListener('change', () => cargarDependiente(c));
+    });
+    async function cargarDependiente(c, valor) {
+        const padre = $('#f_' + c.dependeDe);
+        const p = {};
+        p[c.dependeDe.replace('_cod', '')] = padre.value;
+        if (!padre.value) Z.combo(campo(c), [], '-- NINGUNO --');
+        else await Z.cargarCombo(campo(c), c.combo, p, c.req ? '-- ELEGIR --' : '-- NINGUNO --');
+        if (valor !== undefined) campo(c).value = valor ?? '';
+    }
+
+    async function cargarTabla() {
+        const rows = await Z.get(`/ref/${KEY}/list`, { est: $('#cboSee').value, q: $('#txtBuscar').value });
+        if (!rows) return;
+        Z.tabla('#tLista', rows, cols, {
+            onSel: async r => {
+                aop = r[COLS[0].col];
+                ManageButtons(2);
+                await cargarDatos();
+            }
+        });
+    }
+
+    async function cargarDatos() {
+        const d = await Z.get(`/ref/${KEY}/get`, { cod: aop });
+        if (!d) return;
+        $('#txtCod').value = aop;
+        for (const c of CAMPOS) {
+            const el = campo(c);
+            if (c.tipo === 'p') { el.value = ''; continue; }
+            if (c.tipo === 'b') { el.checked = d[c.col] === true; continue; }
+            if (c.dependeDe) { await cargarDependiente(c, d[c.col]); continue; }
+            el.value = d[c.col] ?? '';
+            if (c.tipo.startsWith('c') && d[c.col] != null && el.value === '') {
+                // el registro apunta a un dato anulado: se agrega para poder visualizarlo
+                const o = document.createElement('option');
+                o.value = d[c.col]; o.textContent = d[c.col] + ' (ANULADO)';
+                el.appendChild(o); el.value = d[c.col];
+            }
+        }
+    }
+
+    function editable(v) {
+        CAMPOS.forEach(c => campo(c).disabled = !v);
+        $('#txtCod').disabled = !(v && COD_MANUAL && bandera === 1);
+    }
+
+    function ManageButtons(estado) {
+        const anulados = $('#cboSee').value === 'ANU';
+        if (estado === 1) { // boot
+            t.bloquear(false);
+            t.sel(1);
+            $('#btnEdit').disabled = $('#btnDelete').disabled = $('#btnSave').disabled = $('#btnCancelar').disabled = true;
+            $('#btnAdd').disabled = false;
+            editable(false);
+        }
+        if (estado === 2) { // pressed
+            $('#btnAdd').disabled = true;
+            $('#btnEdit').disabled = anulados;
+            $('#btnDelete').disabled = false;
+            $('#btnDelete').querySelector('span').textContent = anulados ? 'Reactivar' : 'Anular';
+            $('#btnSave').disabled = true;
+            $('#btnCancelar').disabled = false;
+        }
+        if (estado === 3) { // editing
+            $('#btnAdd').disabled = $('#btnEdit').disabled = $('#btnDelete').disabled = true;
+            $('#btnSave').disabled = $('#btnCancelar').disabled = false;
+            t.sel(0);
+            t.bloquear(true);
+            editable(true);
+            const primero = $('#txtCod').disabled ? campo(CAMPOS[0]) : $('#txtCod');
+            setTimeout(() => { primero.focus(); primero.select && primero.select(); }, 0);
+        }
+    }
+
+    function clean() {
+        $('#txtCod').value = '';
+        CAMPOS.forEach(c => { const el = campo(c); if (c.tipo === 'b') el.checked = false; else el.value = ''; });
+        CAMPOS.filter(c => c.dependeDe).forEach(c => Z.combo(campo(c), [], '-- NINGUNO --'));
+        aop = null;
+        bandera = 0;
+    }
+
+    async function save() {
+        const f = {};
+        CAMPOS.forEach(c => { const el = campo(c); f[c.col] = c.tipo === 'b' ? String(el.checked) : el.value; });
+        const cod = bandera === 1 ? (COD_MANUAL ? $('#txtCod').value : null) : aop;
+        const r = await Z.post(`/ref/${KEY}/save`, { ban: bandera, cod, f });
+        if (!r) return false;
+        await Z.msg(r.msg + (bandera === 1 ? `\nCódigo Nº ${r.cod}` : ''), 'Mensaje', 'info');
+        return true;
+    }
+
+    async function validar_blancos() {
+        if (COD_MANUAL && bandera === 1 && !$('#txtCod').value.trim()) {
+            await Z.msg('Debe completar los campos Obligatorios(*) para proceder');
+            $('#txtCod').focus();
+            return;
+        }
+        if (!(await Z.requeridos($('#edicion')))) return;
+        if (await save()) { clean(); await cargarTabla(); ManageButtons(1); }
+    }
+
+    $('#btnAdd').onclick = () => {
+        clean();
+        bandera = 1;
+        $('#txtCod').value = COD_MANUAL ? '' : '(automático)';
+        ManageButtons(3);
+    };
+    $('#btnEdit').onclick = () => { bandera = 2; ManageButtons(3); };
+    $('#btnDelete').onclick = async () => {
+        const reactivar = $('#cboSee').value === 'ANU';
+        if (await Z.confirm(reactivar ? '¿Desea Reactivar este Registro?' : '¿Desea Anular este Registro?')) {
+            bandera = reactivar ? 4 : 3;
+            await save();
+        }
+        clean(); await cargarTabla(); ManageButtons(1);
+    };
+    $('#btnSave').onclick = validar_blancos;
+    $('#btnCancelar').onclick = async () => { clean(); await cargarTabla(); ManageButtons(1); };
+    $('#btnExit').onclick = async () => {
+        if (bandera === 1 || bandera === 2) {
+            if (!(await Z.confirm('Hay datos sin guardar, ¿Desea Salir de todas formas?'))) return;
+        }
+        Z.salir();
+    };
+    $('#txtBuscar').addEventListener('keydown', e => { if (e.key === 'Enter') cargarTabla(); });
+    $('#txtBuscar').addEventListener('input', () => { if (!$('#txtBuscar').value.trim()) cargarTabla(); });
+    $('#cboSee').onchange = () => { clean(); cargarTabla(); ManageButtons(1); };
+    // <ENTER> en el ultimo campo = Guardar (txtDesKeyPressed del legacy)
+    const ultimo = campo(CAMPOS[CAMPOS.length - 1]);
+    ultimo.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); validar_blancos(); } });
+
+    ManageButtons(1);
+    cargarCombos().then(cargarTabla);
+})();
+</script>
+</body>
+</html>

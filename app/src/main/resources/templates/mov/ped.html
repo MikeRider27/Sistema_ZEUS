@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head(${mov.titulo})}"></head>
+<body class="ventana">
+<div class="tabs" id="tabs">
+    <div class="tab-bar"><button type="button">Edicion</button><button type="button">Listado</button></div>
+    <div class="tab-body">
+        <div class="tab-panel" id="edicion">
+            <div class="etched form-grid">
+                <label for="txtCod">Codigo</label><input type="text" id="txtCod" class="cod" disabled>
+                <label for="txtSuc">Sucursal</label><input type="text" id="txtSuc" disabled>
+                <label for="txtDate">Fecha y Hora</label><input type="text" id="txtDate" disabled>
+                <label for="txtEstado">Estado</label><input type="text" id="txtEstado" disabled>
+            </div>
+            <fieldset class="etched" id="panCarga">
+                <legend>Detalle del Pedido</legend>
+                <div class="fila">
+                    <label for="cboMat">Material</label><select id="cboMat" class="crece"></select>
+                    <label for="txtMedida">Medida</label><input type="text" id="txtMedida" disabled size="5">
+                    <label for="txtCant">Cantidad</label><input type="text" id="txtCant" class="num solo-num" size="8">
+                    <span class="enter">&lt;ENTER&gt;</span>
+                </div>
+            </fieldset>
+            <div class="fila" id="panAprob" hidden>
+                <span class="ayuda">Apruebe o rechace cada material; puede corregir la cantidad aprobada.</span>
+                <button type="button" class="btn chico" id="btnAprobAllDet"><img src="/img/guardar.png" alt="">Aprob. Todos</button>
+            </div>
+            <div class="tabla-wrap">
+                <table class="grilla" id="tDet">
+                    <thead><tr><th>Cantidad</th><th>Medida</th><th>Material</th><th>Estado</th><th></th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="tab-panel" id="listado">
+            <div class="etched fila">
+                <div th:replace="~{fragments :: filtros('VIG:Vigentes,APR:Aprobados,RCH:Rechazados,ORD.P:Ordenado Parcial,ORD.T:Ordenado Total,ANU:Anulados')}"></div>
+                <label for="fSuc">en</label><select id="fSuc"></select>
+            </div>
+            <div class="tabla-wrap">
+                <table class="grilla" id="tLista">
+                    <thead><tr><th>Codigo</th><th>Sucursal</th><th>Fecha y Hora</th><th>Usuario que ing.</th><th>Aprobado por</th><th>Estado</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="tabla-wrap chica">
+                <table class="grilla" id="tListaDet">
+                    <thead><tr><th>Cantidad</th><th>Medida</th><th>Materiales</th><th>Ordenado</th><th>Estado</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="botonera">
+    <div class="izq"><button type="button" class="btn" id="btnAprove"><img src="/img/guardar.png" alt="">Aprobar</button></div>
+    <button type="button" class="btn" id="btnAdd"><img src="/img/agregar.png" alt="">Agregar</button>
+    <button type="button" class="btn" id="btnNull"><img src="/img/anular.png" alt="">Anular</button>
+    <button type="button" class="btn" id="btnSave"><img src="/img/guardar.png" alt="">Guardar</button>
+    <button type="button" class="btn" id="btnCancel"><img src="/img/cancelar.png" alt="">Cancelar</button>
+    <button type="button" class="btn" id="btnExit"><img src="/img/salir.png" alt="">Salir</button>
+</div>
+
+<script th:inline="javascript">
+(function () {
+    const SUC = /*[[${u.suc}]]*/ '';
+    const APROBADOR = /*[[${u.aprobador}]]*/ false;
+    const { $ } = Z;
+    let det = [];
+
+    function pintarDet(aprobando) {
+        Z.tabla('#tDet', det, [
+            { html: (r, i) => aprobando && r.est_cod !== 'RCH'
+                    ? Object.assign(document.createElement('input'), { value: r.det_cant, className: 'num solo-num', oninput: e => r.det_cant = e.target.value })
+                    : Z.fmtNum(r.det_cant), cls: 'n' },
+            { c: 'un_cod' }, { c: 'mat' },
+            { html: (r, i) => {
+                if (!aprobando) return r.est_cod;
+                const s = document.createElement('select');
+                s.innerHTML = '<option value="VIG">PENDIENTE</option><option value="APR">APROBAR</option><option value="RCH">RECHAZAR</option>';
+                s.value = r.est_cod;
+                s.onchange = () => { r.est_cod = s.value; pintarDet(true); };
+                return s;
+            } },
+            { html: (r, i) => {
+                if (aprobando) return '';
+                const b = document.createElement('button');
+                b.type = 'button'; b.className = 'btn chico'; b.textContent = 'Quitar';
+                b.onclick = () => { det.splice(i, 1); pintarDet(false); };
+                return b;
+            } }
+        ], { vacio: 'Agregue materiales al pedido' });
+    }
+
+    async function agregarDet() {
+        const mat = Z.filaCombo('#cboMat');
+        const cant = Z.num($('#txtCant').value);
+        if (!mat) { await Z.msg('Seleccione un Material'); return $('#cboMat').focus(); }
+        if (cant <= 0) { await Z.msg('La cantidad debe ser mayor a cero'); return $('#txtCant').focus(); }
+        if (det.some(d => d.mat_cod === mat.cod)) { await Z.msg('El material ya fue agregado al pedido'); return; }
+        det.push({ mat_cod: mat.cod, mat: mat.des, un_cod: mat.un_cod, det_cant: cant, est_cod: 'VIG' });
+        pintarDet(false);
+        $('#txtCant').value = '';
+        $('#cboMat').value = '';
+        $('#txtMedida').value = '';
+        $('#cboMat').focus();
+    }
+
+    const m = Z.mov({
+        key: 'ped',
+        lista: {
+            q: 'ped_lista', tabla: '#tLista', cod: 'ped_cod',
+            cols: [{ c: 'ped_cod', f: 'n' }, { c: 'suc_des' }, { c: 'date_' }, { c: 'emp' }, { c: 'emp_apr' }, { c: 'est_cod' }]
+        },
+        det: { q: 'ped_det', tabla: '#tListaDet',
+            cols: [{ c: 'det_cant', f: 'n' }, { c: 'un_cod' }, { c: 'mat' }, { c: 'det_ord', f: 'b' }, { c: 'est_cod' }] },
+        puedeAnular: r => r.est_cod === 'VIG' || r.est_cod === 'APR',
+        acciones: [{ btn: '#btnAprove', puede: r => r.est_cod === 'VIG' && APROBADOR }],
+        nuevo() {
+            $('#txtCod').value = '(automático)';
+            $('#txtSuc').value = SUC;
+            $('#txtDate').value = new Date().toLocaleString('es-PY');
+            $('#txtEstado').value = 'VIG';
+            $('#panCarga').disabled = false;
+            $('#panAprob').hidden = true;
+            det = [];
+            pintarDet(false);
+            $('#cboMat').focus();
+        },
+        limpiar() { det = []; pintarDet(false); $('#panAprob').hidden = true; $('#panCarga').disabled = false; },
+        async guardar(ban) {
+            if (ban === 1) {
+                if (!det.length) { await Z.msg('No se puede guardar un Pedido sin detalles'); return null; }
+                return { det: det.map(d => ({ mat_cod: d.mat_cod, cant: Z.num(d.det_cant) })) };
+            }
+            // ban 4: aprobacion
+            if (det.some(d => d.est_cod === 'VIG')) { await Z.msg('Debe aprobar o rechazar todos los detalles'); return null; }
+            if (!det.some(d => d.est_cod === 'APR')
+                && !(await Z.confirm('Todos los detalles están rechazados. El pedido quedará RECHAZADO.\n¿Desea continuar?'))) return null;
+            if (det.some(d => d.est_cod === 'APR' && Z.num(d.det_cant) <= 0)) { await Z.msg('Las cantidades aprobadas deben ser mayores a cero'); return null; }
+            return { det: det.map(d => ({ mat_cod: d.mat_cod, cant: Z.num(d.det_cant), est: d.est_cod })), mensaje: 'Pedido procesado con Éxito' };
+        }
+    });
+
+    // Aprobar: pasa a Edicion con los detalles del pedido seleccionado
+    $('#btnAprove').onclick = async () => {
+        const r = m.sel;
+        const d = await Z.q('ped_det', { cod: r.ped_cod });
+        if (!d) return;
+        m.editar(4);
+        $('#txtCod').value = r.ped_cod;
+        $('#txtSuc').value = r.suc_des;
+        $('#txtDate').value = r.date_;
+        $('#txtEstado').value = r.est_cod;
+        $('#panCarga').disabled = true;
+        $('#panAprob').hidden = false;
+        det = d;
+        pintarDet(true);
+    };
+    $('#btnAprobAllDet').onclick = () => { det.forEach(d => d.est_cod = 'APR'); pintarDet(true); };
+
+    $('#cboMat').onchange = () => { const r = Z.filaCombo('#cboMat'); $('#txtMedida').value = r ? r.un_cod : ''; $('#txtCant').focus(); };
+    $('#txtCant').addEventListener('keydown', e => { if (e.key === 'Enter') agregarDet(); });
+    Z.cargarCombo('#cboMat', 'cbo_mat');
+    Z.cargarCombo('#fSuc', 'cbo_suc_otras', {}, 'Esta Sucursal');
+})();
+</script>
+</body>
+</html>

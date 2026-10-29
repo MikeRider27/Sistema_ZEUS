@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<!-- cabecera comun de las ventanas internas -->
+<head th:fragment="head(titulo)">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="_csrf" th:content="${_csrf.token}">
+    <meta name="_csrf_header" th:content="${_csrf.headerName}">
+    <title th:text="${titulo}">Sistema ZEUS</title>
+    <link rel="icon" href="/img/logo.png">
+    <link rel="stylesheet" href="/css/zeus.css">
+    <script src="/js/zeus.js"></script>
+</head>
+<body>
+
+<!-- filtros del listado: mes / año / estado (Filtrar Por ... Ver ... de ... en ...) -->
+<!-- estados: "VIG:Vigentes,ANU:Anulados" -->
+<div th:fragment="filtros(estados)" class="barra-filtro">
+    <label for="fMes">Filtrar Por</label><select id="fMes"></select>
+    <label for="fAnho">de</label><select id="fAnho"></select>
+    <label for="fEst">Ver</label>
+    <select id="fEst">
+        <option value="">Todos</option>
+        <option th:each="e : ${#strings.arraySplit(estados, ',')}"
+                th:value="${#strings.substringBefore(e, ':')}" th:text="${#strings.substringAfter(e, ':')}"></option>
+    </select>
+    <button type="button" class="btn chico" id="btnRefrescar"><img src="/img/refresh.png" alt="">Actualizar</button>
+</div>
+
+<!-- botonera estandar de los movimientos -->
+<div th:fragment="botonera" class="botonera">
+    <button type="button" class="btn" id="btnAdd"><img src="/img/agregar.png" alt="">Agregar</button>
+    <button type="button" class="btn" id="btnNull"><img src="/img/anular.png" alt="">Anular</button>
+    <button type="button" class="btn" id="btnSave"><img src="/img/guardar.png" alt="">Guardar</button>
+    <button type="button" class="btn" id="btnCancel"><img src="/img/cancelar.png" alt="">Cancelar</button>
+    <button type="button" class="btn" id="btnExit"><img src="/img/salir.png" alt="">Salir</button>
+</div>
+</body>
+</html>

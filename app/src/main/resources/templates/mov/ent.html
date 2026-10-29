@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head(${mov.titulo})}"></head>
+<body class="ventana">
+<div class="tabs" id="tabs">
+    <div class="tab-bar"><button type="button">Edicion</button><button type="button">Listado</button></div>
+    <div class="tab-body">
+        <div class="tab-panel" id="edicion">
+            <div class="etched form-grid">
+                <label for="txtCod">Codigo</label><input type="text" id="txtCod" class="cod" disabled>
+                <label for="txtFecha">Recibido el</label><input type="text" id="txtFecha" disabled>
+                <label for="cboVeh" class="req">Vehiculo</label><select id="cboVeh" class="ancho"></select>
+                <label for="txtCli">Asegurado</label><input type="text" id="txtCli" disabled>
+                <label for="txtSeg">Cia. de Seguro</label><input type="text" id="txtSeg" disabled>
+                <label for="txtPol">Poliza Nº</label><input type="text" id="txtPol" disabled>
+                <label for="txtSin">Siniestro Nº</label><input type="text" id="txtSin" class="upper" maxlength="30">
+                <label for="cboComb" class="req">Combustible</label><select id="cboComb"></select>
+                <label for="txtKm">Kilometraje</label><input type="text" id="txtKm" class="num solo-num" maxlength="9">
+            </div>
+            <fieldset class="etched">
+                <legend>El vehiculo ingresa con</legend>
+                <div class="checks">
+                    <label><input type="checkbox" id="ent_key">Llaves</label>
+                    <label><input type="checkbox" id="ent_cat">Gato</label>
+                    <label><input type="checkbox" id="ent_bal">Baliza</label>
+                    <label><input type="checkbox" id="ent_aux">Auxilio</label>
+                    <label><input type="checkbox" id="ent_taz">Tazas</label>
+                    <label><input type="checkbox" id="ent_her">Herramientas</label>
+                    <label><input type="checkbox" id="ent_rad">Radio</label>
+                    <label><input type="checkbox" id="ent_ext">Extintor</label>
+                </div>
+            </fieldset>
+            <fieldset class="etched">
+                <legend>Daños observados</legend>
+                <div class="fila">
+                    <label for="cboPza">Pieza</label><select id="cboPza" class="crece"></select>
+                    <label for="cboDam">Daño</label><select id="cboDam"></select>
+                    <button type="button" class="btn chico" id="btnAddDet"><img src="/img/agregar.png" alt="">Agregar</button>
+                </div>
+            </fieldset>
+            <div class="tabla-wrap chica">
+                <table class="grilla" id="tDet">
+                    <thead><tr><th>Piezas</th><th>Daño</th><th></th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="fila"><label for="txtObs">Observaciones</label><textarea id="txtObs" class="upper crece" rows="2" maxlength="500"></textarea></div>
+        </div>
+        <div class="tab-panel" id="listado">
+            <div class="etched fila">
+                <div th:replace="~{fragments :: filtros('REC:Recibidos,PRE:Presupuestados,TAL:En Taller,TER:Terminados,ENT:Entregados,ANU:Anulados')}"></div>
+                <label for="txtBuscar">Buscar</label><input type="text" id="txtBuscar" class="upper" placeholder="Vehiculo, asegurado, cia...">
+            </div>
+            <div class="tabla-wrap">
+                <table class="grilla" id="tLista">
+                    <thead><tr><th>#</th><th>Recibido el</th><th>Cia.</th><th>Vehiculo</th><th>Asegurado</th><th>Siniestro Nº</th><th>Estado</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="tabla-wrap chica">
+                <table class="grilla" id="tListaDet">
+                    <thead><tr><th>Piezas</th><th>Daño</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="botonera">
+    <div class="izq">
+        <button type="button" class="btn" id="btnEdit"><img src="/img/editar.png" alt="">Editar</button>
+        <button type="button" class="btn" id="btnEntregar"><img src="/img/vehiculo.png" alt="">Entregar</button>
+    </div>
+    <button type="button" class="btn" id="btnAdd"><img src="/img/agregar.png" alt="">Agregar</button>
+    <button type="button" class="btn" id="btnNull"><img src="/img/anular.png" alt="">Anular</button>
+    <button type="button" class="btn" id="btnSave"><img src="/img/guardar.png" alt="">Guardar</button>
+    <button type="button" class="btn" id="btnCancel"><img src="/img/cancelar.png" alt="">Cancelar</button>
+    <button type="button" class="btn" id="btnExit"><img src="/img/salir.png" alt="">Salir</button>
+</div>
+
+<script>
+(function () {
+    const { $ } = Z;
+    const CHECKS = ['ent_key', 'ent_cat', 'ent_bal', 'ent_aux', 'ent_taz', 'ent_her', 'ent_rad', 'ent_ext'];
+    let det = [];
+
+    function pintar() {
+        Z.tabla('#tDet', det, [{ c: 'pie_des' }, { c: 'dam_des' },
+            { html: (r, i) => { const b = Object.assign(document.createElement('button'), { type: 'button', className: 'btn chico', textContent: 'Quitar' });
+                b.onclick = () => { det.splice(i, 1); pintar(); }; return b; } }], { vacio: 'Registre las piezas dañadas' });
+    }
+    function datosVeh() {
+        const v = Z.filaCombo('#cboVeh');
+        $('#txtCli').value = v ? v.cli : '';
+        $('#txtSeg').value = v ? v.seg_des : '';
+        $('#txtPol').value = v ? (v.veh_poliza || '') : '';
+    }
+    $('#cboVeh').onchange = datosVeh;
+    $('#btnAddDet').onclick = async () => {
+        const p = Z.filaCombo('#cboPza'), d = Z.filaCombo('#cboDam');
+        if (!p || !d) { await Z.msg('Seleccione la Pieza y el nivel de Daño'); return; }
+        if (det.some(x => x.pie_cod === p.cod)) { await Z.msg('La pieza ya fue registrada'); return; }
+        det.push({ pie_cod: p.cod, pie_des: p.des, dam_cod: d.cod, dam_des: d.des });
+        pintar();
+        $('#cboPza').value = '';
+        $('#cboPza').focus();
+    };
+
+    const m = Z.mov({
+        key: 'ent',
+        lista: { q: 'ent_lista', tabla: '#tLista', cod: 'ent_cod', params: () => ({ q: $('#txtBuscar').value }),
+            cols: [{ c: 'ent_cod', f: 'n' }, { c: 'date_' }, { c: 'seg_des' }, { c: 'veh' }, { c: 'cli' }, { c: 'ent_sin' }, { c: 'est_cod' }] },
+        det: { q: 'ent_det', tabla: '#tListaDet', cols: [{ c: 'pie_des' }, { c: 'dam_des' }] },
+        puedeAnular: r => r.est_cod === 'REC',
+        acciones: [{ btn: '#btnEdit', puede: r => r.est_cod === 'REC' }, { btn: '#btnEntregar', puede: r => r.est_cod === 'TER' }],
+        nuevo() {
+            $('#txtCod').value = '(automático)';
+            $('#txtFecha').value = new Date().toLocaleString('es-PY');
+            det = []; pintar(); datosVeh();
+            $('#cboVeh').focus();
+        },
+        limpiar() { det = []; pintar(); datosVeh(); },
+        async guardar() {
+            if (!(await Z.requeridos($('#edicion')))) return null;
+            if (!det.length) { await Z.msg('Debe registrar al menos una pieza dañada'); return null; }
+            const cab = { veh_cod: $('#cboVeh').value, comb_cod: $('#cboComb').value, ent_km: $('#txtKm').value.replace(/\D/g, '') || null,
+                          ent_sin: $('#txtSin').value, ent_obs: $('#txtObs').value };
+            CHECKS.forEach(c => cab[c] = $('#' + c).checked);
+            return { cab, det: det.map(d => ({ pie_cod: d.pie_cod, dam_cod: d.dam_cod })) };
+        }
+    });
+
+    $('#btnEdit').onclick = async () => {
+        const r = (await Z.q('ent_uno', { cod: m.sel.ent_cod }) || [])[0];
+        const d = await Z.q('ent_det', { cod: m.sel.ent_cod });
+        if (!r || !d) return;
+        m.editar(2);
+        $('#txtCod').value = r.ent_cod;
+        $('#txtFecha').value = r.date_;
+        $('#cboVeh').value = r.veh_cod; datosVeh();
+        $('#cboComb').value = r.comb_cod;
+        $('#txtKm').value = r.ent_km ?? '';
+        $('#txtSin').value = r.ent_sin ?? '';
+        $('#txtObs').value = r.ent_obs ?? '';
+        CHECKS.forEach(c => $('#' + c).checked = r[c] === true);
+        det = d; pintar();
+    };
+    $('#btnEntregar').onclick = async () => {
+        if (!(await Z.confirm('¿Confirma la entrega del vehículo al cliente?'))) return;
+        if (await m.ejecutar(4, m.sel.ent_cod, null, null, 'Vehículo entregado con Éxito') !== null) m.terminar();
+    };
+    $('#txtBuscar').addEventListener('keydown', e => { if (e.key === 'Enter') m.cargarLista(); });
+    Z.cargarCombo('#cboVeh', 'cbo_veh');
+    Z.cargarCombo('#cboComb', 'cbo_comb');
+    Z.cargarCombo('#cboPza', 'cbo_pza');
+    Z.cargarCombo('#cboDam', 'cbo_dam');
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head('Copia de Seguridad')}"></head>
+<body class="ventana">
+<div class="etched" style="flex:1" th:if="${u.admin}">
+    <p><img src="/img/backup.png" alt="" style="vertical-align:middle"> Genera un respaldo completo de la base de datos (estructura y datos) en formato SQL.</p>
+    <p>Para restaurarlo en el servidor:</p>
+    <pre style="background:#fff;border:1px solid #aaa;padding:6px;white-space:pre-wrap">docker compose exec -T db psql -U postgres -d zeus &lt; zeus_AAAAMMDD_HHMM.sql</pre>
+</div>
+<div class="etched" style="flex:1" th:unless="${u.admin}">No posee los permisos necesarios.</div>
+<div class="botonera">
+    <a th:if="${u.admin}" class="btn" href="/sis/backup/descargar" style="text-decoration:none;color:inherit"><img src="/img/backup.png" alt="">Generar Copia</a>
+    <button type="button" class="btn" id="btnExit" onclick="Z.salir()"><img src="/img/salir.png" alt="">Salir</button>
+</div>
+</body>
+</html>

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head('Manual de Ayuda')}"></head>
+<body class="ventana">
+<div class="hoja">
+<h2>Manual de Ayuda - Sistema ZEUS</h2>
+<h3>Uso de las ventanas</h3>
+<ul>
+    <li><b>Listado</b>: filtre por mes, año y estado. Haga clic en un registro para ver su detalle y habilitar las acciones.</li>
+    <li><b>Agregar</b>: abre la pestaña Edición con un registro nuevo. <b>Guardar</b> confirma, <b>Cancelar</b> descarta.</li>
+    <li><b>Anular</b>: los registros no se borran, quedan en estado ANULADO (en referenciales se pueden <b>Reactivar</b>).</li>
+    <li>La tecla <b>ESC</b> equivale a <b>Salir</b>; <b>&lt;ENTER&gt;</b> agrega el detalle o guarda.</li>
+</ul>
+<h3>Circuito de Compras</h3>
+<ol>
+    <li><b>Registrar Pedidos</b> de materiales (estado VIGENTE).</li>
+    <li>Un encargado/gerente lo <b>Aprueba</b> detalle por detalle (APROBADO / RECHAZADO).</li>
+    <li><b>Generar Orden de Compra</b> a un proveedor con los materiales aprobados (pedido ORDENADO PARCIAL/TOTAL).</li>
+    <li><b>Registrar Fact. Compra</b> de la orden: los materiales ingresan al stock del depósito.</li>
+    <li><b>Ajustes</b> corrigen el stock; <b>Remisiones</b> trasladan materiales entre sucursales (la destino las <b>Recibe</b>).</li>
+</ol>
+<h3>Circuito de Servicio</h3>
+<ol>
+    <li><b>Recepción</b> del vehículo con las piezas dañadas (RECIBIDO).</li>
+    <li><b>Presupuesto</b> de piezas y trabajos (PRESUPUESTADO) que se <b>Aprueba</b> o <b>Rechaza</b>.</li>
+    <li><b>Orden de Trabajo</b> del presupuesto aprobado (EN TALLER) y <b>O.T. Interna</b>: asignación de piezas a funcionarios.</li>
+    <li><b>Gestionar Materiales</b>: registra los insumos retirados del depósito para la O.T.</li>
+    <li><b>Control de Calidad</b>: si se aprueba, la O.T. queda TERMINADA.</li>
+    <li><b>Garantía</b>: reclamos sobre trabajos terminados (6 meses).</li>
+</ol>
+<h3>Circuito de Cobros</h3>
+<ol>
+    <li><b>Apertura de caja</b> (una por cajero).</li>
+    <li><b>Facturación</b> de la O.T. terminada al asegurado o a la cía. de seguros.</li>
+    <li><b>Cobro</b> en una o varias formas (efectivo, cheque, tarjeta...). Con la factura emitida se puede <b>Entregar</b> el vehículo desde Recepción.</li>
+    <li><b>Cierre de caja</b> con arqueo.</li>
+</ol>
+<h3>Niveles de permiso (cargo)</h3>
+<p>1 Administrador (todo, usuarios, copias de seguridad) · 2 Gerente · 3 Encargado (aprobaciones, anulaciones) · 4 Operador.</p>
+</div>
+<div class="botonera no-print"><button type="button" class="btn" id="btnExit" onclick="Z.salir()"><img src="/img/salir.png" alt="">Salir</button></div>
+</body>
+</html>

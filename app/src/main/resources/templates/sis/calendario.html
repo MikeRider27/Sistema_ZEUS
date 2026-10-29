@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head('Calendario')}"></head>
+<body class="ventana">
+<div class="etched barra-filtro" style="justify-content:center">
+    <button type="button" class="btn chico" id="ant">&#9664;</button>
+    <select id="mes"></select><input type="number" id="anho" style="width:70px">
+    <button type="button" class="btn chico" id="sig">&#9654;</button>
+    <button type="button" class="btn chico" id="hoy">Hoy</button>
+</div>
+<div class="tabla-wrap">
+    <table class="grilla" id="cal" style="height:100%">
+        <thead><tr><th>Dom</th><th>Lun</th><th>Mar</th><th>Mié</th><th>Jue</th><th>Vie</th><th>Sáb</th></tr></thead><tbody></tbody>
+    </table>
+</div>
+<div class="botonera"><button type="button" class="btn" id="btnExit" onclick="Z.salir()"><img src="/img/salir.png" alt="">Salir</button></div>
+<script>
+(function () {
+    const { $ } = Z;
+    const hoy = new Date();
+    Z.combo('#mes', Z.MESES.map((m, i) => ({ cod: i, des: m })), null);
+    function pintar() {
+        const m = Number($('#mes').value), a = Number($('#anho').value);
+        const ini = new Date(a, m, 1).getDay(), dias = new Date(a, m + 1, 0).getDate();
+        const tb = $('#cal tbody'); tb.innerHTML = '';
+        let tr = null;
+        for (let i = 0; i < 42; i++) {
+            if (i % 7 === 0) { tr = tb.insertRow(); }
+            const td = tr.insertCell(); const d = i - ini + 1;
+            td.className = 'c'; td.style.height = '40px'; td.style.fontSize = '14px';
+            if (d > 0 && d <= dias) {
+                td.textContent = d;
+                if (d === hoy.getDate() && m === hoy.getMonth() && a === hoy.getFullYear()) { td.style.background = '#3399ff'; td.style.color = '#fff'; }
+                if (i % 7 === 0) td.style.color = td.style.color || '#c00';
+            }
+        }
+    }
+    function mover(n) { let m = Number($('#mes').value) + n, a = Number($('#anho').value);
+        if (m < 0) { m = 11; a--; } if (m > 11) { m = 0; a++; } $('#mes').value = m; $('#anho').value = a; pintar(); }
+    $('#ant').onclick = () => mover(-1); $('#sig').onclick = () => mover(1);
+    $('#hoy').onclick = () => { $('#mes').value = hoy.getMonth(); $('#anho').value = hoy.getFullYear(); pintar(); };
+    $('#mes').onchange = pintar; $('#anho').onchange = pintar;
+    $('#hoy').onclick();
+})();
+</script>
+</body>
+</html>

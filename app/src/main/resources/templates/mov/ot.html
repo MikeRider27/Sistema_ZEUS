@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head(${mov.titulo})}"></head>
+<body class="ventana">
+<div class="tabs" id="tabs">
+    <div class="tab-bar"><button type="button">Edicion</button><button type="button">Listado</button></div>
+    <div class="tab-body">
+        <div class="tab-panel" id="edicion">
+            <div class="etched form-grid">
+                <label for="txtCod">Codigo</label><input type="text" id="txtCod" class="cod" disabled>
+                <label for="txtFin" class="req">F. estimada de entrega</label><input type="date" id="txtFin">
+                <label for="cboPrep" class="req">Presupuesto Nº</label><select id="cboPrep" class="ancho"></select>
+                <label for="txtObs">Observaciones</label><textarea id="txtObs" class="upper ancho" rows="2" maxlength="500"></textarea>
+            </div>
+            <div class="ayuda">Solo se listan presupuestos APROBADOS. Las piezas se asignan a los funcionarios en "Emitir O. de Trabajo (Interna)".</div>
+            <div class="fila" style="align-items:stretch;flex:1">
+                <div class="tabla-wrap crece">
+                    <table class="grilla" id="tPza"><thead><tr><th>Pieza</th><th>Nivel de Daño</th><th>Precio</th></tr></thead><tbody></tbody></table>
+                </div>
+                <div class="tabla-wrap crece">
+                    <table class="grilla" id="tTrab"><thead><tr><th>Trabajo</th><th>Costo</th></tr></thead><tbody></tbody></table>
+                </div>
+            </div>
+            <div class="fila" style="justify-content:flex-end"><span class="total">Total: <span id="lblTotal">0</span></span></div>
+        </div>
+        <div class="tab-panel" id="listado">
+            <div class="etched" th:insert="~{fragments :: filtros('VIG:En Proceso,TER:Terminadas,ENT:Entregadas,ANU:Anuladas')}"></div>
+            <div class="tabla-wrap">
+                <table class="grilla" id="tLista">
+                    <thead><tr><th>#</th><th>Presupuesto</th><th>Cia. de Seguro</th><th>Vehiculo</th><th>Asegurado</th><th>Fecha</th><th>Entrega Est.</th><th>Total</th><th>Estado</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="tabla-wrap chica">
+                <table class="grilla" id="tListaDet"><thead><tr><th>Pieza</th><th>Funcionario Asignado</th><th>Cargo</th><th>Estado</th></tr></thead><tbody></tbody></table>
+            </div>
+        </div>
+    </div>
+</div>
+<div th:replace="~{fragments :: botonera}"></div>
+
+<script th:inline="javascript">
+(function () {
+    const APROBADOR = /*[[${u.aprobador}]]*/ false;
+    const { $ } = Z;
+
+    async function cargarPrep(cod) {
+        const [p, t] = cod ? await Promise.all([Z.q('prep_det_pie', { cod }), Z.q('prep_det_trab', { cod })]) : [ [], [] ];
+        Z.tabla('#tPza', p || [], [{ c: 'pie_des' }, { c: 'dam_des' }, { c: 'det_precio', f: 'n' }], { vacio: 'Seleccione un presupuesto' });
+        Z.tabla('#tTrab', t || [], [{ c: 'trab_des' }, { c: 'det_precio', f: 'n' }], { vacio: '' });
+        $('#lblTotal').textContent = Z.fmtNum([...(p || []), ...(t || [])].reduce((a, d) => a + Number(d.det_precio), 0));
+    }
+    $('#cboPrep').onchange = () => cargarPrep($('#cboPrep').value);
+
+    Z.mov({
+        key: 'ot',
+        lista: { q: 'ot_lista', tabla: '#tLista', cod: 'ot_cod',
+            cols: [{ c: 'ot_cod', f: 'n' }, { c: 'prep_cod', f: 'n' }, { c: 'seg_des' }, { c: 'veh' }, { c: 'cli' }, { c: 'date_' },
+                   { c: 'fin' }, { c: 'total', f: 'n' }, { c: 'est_cod' }] },
+        det: { q: 'ot_det', tabla: '#tListaDet', cols: [{ c: 'pie_des' }, { c: 'emp' }, { c: 'car_des' }, { c: 'est_cod' }] },
+        puedeAnular: r => r.est_cod === 'VIG' && APROBADOR,
+        async nuevo() {
+            $('#txtCod').value = '(automático)';
+            const v = new Date(); v.setDate(v.getDate() + 7);
+            $('#txtFin').value = v.toISOString().slice(0, 10);
+            await Z.cargarCombo('#cboPrep', 'prep_para_ot');
+            cargarPrep(null);
+            $('#cboPrep').focus();
+        },
+        limpiar() { cargarPrep(null); },
+        async guardar() {
+            if (!(await Z.requeridos($('#edicion')))) return null;
+            if ($('#txtFin').value < Z.hoy()) { await Z.msg('La fecha estimada de entrega no puede ser anterior a hoy'); return null; }
+            return { cab: { prep_cod: $('#cboPrep').value, ot_fin: $('#txtFin').value, ot_obs: $('#txtObs').value }, det: [] };
+        }
+    });
+})();
+</script>
+</body>
+</html>

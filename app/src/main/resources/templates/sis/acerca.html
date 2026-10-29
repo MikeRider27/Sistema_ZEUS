@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head('Acerca del Sistema')}"></head>
+<body class="ventana">
+<div class="etched fila" style="align-items:flex-start;gap:16px;flex:1">
+    <img src="/img/logo_empresa.png" alt="Logo">
+    <div>
+        <h2 style="font:italic bold 34px Georgia,serif;margin:0;color:#1d4f8c;letter-spacing:3px">ZEUS</h2>
+        <p><b>Sistema de Gestión de Taller de Chapería y Pintura</b><br>Versión 2.0 (web)</p>
+        <p>Módulos: Compras, Servicio, Gestión de Cobros, Referenciales e Informes.</p>
+        <p>Versión 1 (2015-2016): aplicación de escritorio Java Swing.<br>
+           Versión 2: aplicación web Spring Boot + PostgreSQL, ejecutada en Docker.</p>
+        <p th:text="|Sesión: ${u.user} - ${u.emp} (${u.cargo}) - ${u.suc}|"></p>
+        <p style="display:flex;gap:8px;align-items:center"><img src="/img/postgresql.png" alt="" height="32"> PostgreSQL 16</p>
+    </div>
+</div>
+<div class="botonera"><button type="button" class="btn" id="btnExit" onclick="Z.salir()"><img src="/img/salir.png" alt="">Salir</button></div>
+</body>
+</html>

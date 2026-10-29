@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head(${mov.titulo})}"></head>
+<body class="ventana">
+<div class="tabs" id="tabs">
+    <div class="tab-bar"><button type="button">Edicion</button><button type="button">Listado</button></div>
+    <div class="tab-body">
+        <div class="tab-panel" id="edicion">
+            <div class="etched form-grid">
+                <label for="txtCod">Codigo</label><input type="text" id="txtCod" class="cod" disabled>
+                <label for="txtSuc">Sucursal</label><input type="text" id="txtSuc" disabled th:value="${u.suc}">
+            </div>
+            <fieldset class="etched">
+                <legend>Detalle del Ajuste</legend>
+                <div class="form-grid">
+                    <label for="cboMat">Material</label><select id="cboMat"></select>
+                    <label for="cboDep">Deposito</label><select id="cboDep"></select>
+                    <label for="cboMot">Motivo de Ajuste</label><select id="cboMot"></select>
+                    <label for="txtExist">Existencia</label><input type="text" id="txtExist" class="num" disabled>
+                    <label for="txtCant">Cantidad</label>
+                    <div class="fila"><input type="text" id="txtCant" class="num solo-num" size="8"><span class="enter">&lt;ENTER&gt;</span></div>
+                </div>
+            </fieldset>
+            <div class="tabla-wrap">
+                <table class="grilla" id="tDet">
+                    <thead><tr><th>Material</th><th>Deposito</th><th>Motivo de Ajuste</th><th>T. de Ajuste</th><th>Cantidad</th><th></th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="tab-panel" id="listado">
+            <div class="etched fila">
+                <div th:replace="~{fragments :: filtros('VIG:Vigentes,ANU:Anulados')}"></div>
+                <label for="fSuc">en</label><select id="fSuc"></select>
+            </div>
+            <div class="tabla-wrap">
+                <table class="grilla" id="tLista">
+                    <thead><tr><th>Codigo</th><th>Fecha</th><th>Sucursal</th><th>Funcionario</th><th>Estado</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="tabla-wrap chica">
+                <table class="grilla" id="tListaDet">
+                    <thead><tr><th>Material</th><th>Depósito</th><th>Motivo de Ajuste</th><th>T. de Ajuste</th><th>Cantidad</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<div th:replace="~{fragments :: botonera}"></div>
+
+<script th:inline="javascript">
+(function () {
+    const APROBADOR = /*[[${u.aprobador}]]*/ false;
+    const { $ } = Z;
+    let det = [];
+
+    function pintar() {
+        Z.tabla('#tDet', det, [
+            { c: 'mat' }, { c: 'dep' }, { c: 'mot' }, { c: 'tmot' }, { c: 'cant', f: 'n' },
+            { html: (r, i) => { const b = Object.assign(document.createElement('button'), { type: 'button', className: 'btn chico', textContent: 'Quitar' });
+                b.onclick = () => { det.splice(i, 1); pintar(); }; return b; } }
+        ], { vacio: 'Agregue materiales a ajustar' });
+    }
+
+    async function existencia() {
+        $('#txtExist').value = '';
+        if (!$('#cboMat').value || !$('#cboDep').value) return;
+        const r = await Z.q('stock_uno', { mat: $('#cboMat').value, dep: $('#cboDep').value });
+        if (r && r[0]) $('#txtExist').value = Z.fmtNum(r[0].cant);
+    }
+
+    async function agregar() {
+        const mat = Z.filaCombo('#cboMat'), mot = Z.filaCombo('#cboMot'), dep = Z.filaCombo('#cboDep');
+        const cant = Z.num($('#txtCant').value);
+        if (!mat || !mot || !dep) { await Z.msg('Seleccione Material, Depósito y Motivo de Ajuste'); return; }
+        if (cant <= 0) { await Z.msg('La cantidad debe ser mayor a cero'); return $('#txtCant').focus(); }
+        // un ajuste negativo no puede dejar el stock en negativo (validacion de Ajustes.java)
+        if (mot.tmot_signo < 0 && cant > Z.num($('#txtExist').value)) {
+            await Z.msg('La cantidad a descontar supera la existencia del depósito'); return;
+        }
+        if (det.some(d => d.mat_cod === mat.cod && d.dep_cod === dep.cod)) { await Z.msg('El material ya fue agregado para ese depósito'); return; }
+        det.push({ mat_cod: mat.cod, mat: mat.des, dep_cod: dep.cod, dep: dep.des, mot_cod: mot.cod,
+                   mot: mot.des.split(' - ')[0], tmot: mot.tmot_signo < 0 ? 'NEGATIVO' : 'POSITIVO', cant });
+        pintar();
+        $('#txtCant').value = '';
+        $('#cboMat').focus();
+    }
+
+    $('#cboMat').onchange = existencia;
+    $('#cboDep').onchange = existencia;
+    $('#txtCant').addEventListener('keydown', e => { if (e.key === 'Enter') agregar(); });
+
+    Z.mov({
+        key: 'aju',
+        sinAgregar: !APROBADOR,
+        lista: { q: 'aju_lista', tabla: '#tLista', cod: 'aju_cod',
+            cols: [{ c: 'aju_cod', f: 'n' }, { c: 'date_' }, { c: 'suc_des' }, { c: 'emp' }, { c: 'est_cod' }] },
+        det: { q: 'aju_det', tabla: '#tListaDet',
+            cols: [{ c: 'mat' }, { c: 'dep' }, { c: 'mot' }, { c: 'tmot_des' }, { c: 'cant', f: 'n' }] },
+        puedeAnular: r => r.est_cod === 'VIG' && APROBADOR,
+        nuevo() { $('#txtCod').value = '(automático)'; $('#txtSuc').value = /*[[${u.suc}]]*/ ''; det = []; pintar(); $('#cboMat').focus(); },
+        limpiar() { det = []; pintar(); },
+        async guardar() {
+            if (!det.length) { await Z.msg('No se puede guardar un Ajuste sin detalles'); return null; }
+            return { det: det.map(d => ({ mat_cod: d.mat_cod, dep_cod: d.dep_cod, mot_cod: d.mot_cod, cant: d.cant })) };
+        }
+    });
+    Z.cargarCombo('#cboMat', 'cbo_mat');
+    Z.cargarCombo('#cboDep', 'cbo_dep');
+    Z.cargarCombo('#cboMot', 'cbo_mot');
+    Z.cargarCombo('#fSuc', 'cbo_suc_otras', {}, 'Esta Sucursal');
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head('Cambiar Contraseña')}"></head>
+<body class="ventana">
+<div class="etched form-grid una" id="edicion">
+    <label>Usuario</label><input type="text" th:value="${u.user}" disabled>
+    <label for="txtActual" class="req">Contraseña actual</label><input type="password" id="txtActual" autocomplete="current-password">
+    <label for="txtNueva" class="req">Nueva contraseña</label><input type="password" id="txtNueva" autocomplete="new-password">
+    <label for="txtRepetir" class="req">Repetir nueva</label><input type="password" id="txtRepetir" autocomplete="new-password">
+</div>
+<div class="ayuda">Mínimo 6 caracteres.</div>
+<div class="botonera">
+    <button type="button" class="btn" id="btnSave"><img src="/img/guardar.png" alt="">Guardar</button>
+    <button type="button" class="btn" id="btnExit" onclick="Z.salir()"><img src="/img/salir.png" alt="">Salir</button>
+</div>
+<script>
+Z.$('#btnSave').onclick = async () => {
+    if (!(await Z.requeridos())) return;
+    const r = await Z.post('/api/pass', { actual: Z.$('#txtActual').value, nueva: Z.$('#txtNueva').value, repetir: Z.$('#txtRepetir').value });
+    if (r) { await Z.msg(r.msg, 'Mensaje', 'info'); Z.salir(); }
+};
+</script>
+</body>
+</html>

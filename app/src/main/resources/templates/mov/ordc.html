@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head(${mov.titulo})}"></head>
+<body class="ventana">
+<div class="tabs" id="tabs">
+    <div class="tab-bar"><button type="button">Edicion</button><button type="button">Listado</button></div>
+    <div class="tab-body">
+        <div class="tab-panel" id="edicion">
+            <div class="etched form-grid">
+                <label for="txtCod">Codigo</label><input type="text" id="txtCod" class="cod" disabled>
+                <label for="txtDate">Fecha</label><input type="text" id="txtDate" disabled>
+                <label for="cboPed" class="req">S/ Pedido Nº</label><select id="cboPed" class="ancho"></select>
+                <label for="cboProv" class="req">Proveedor</label><select id="cboProv"></select>
+                <label for="cboTpag" class="req">T. de pago</label><select id="cboTpag"></select>
+            </div>
+            <div class="ayuda">Se listan los materiales aprobados del pedido que aún no fueron ordenados. Destilde los que no
+                correspondan a este proveedor e ingrese el precio unitario.</div>
+            <div class="tabla-wrap">
+                <table class="grilla" id="tDet">
+                    <thead><tr><th>Incluir</th><th>Cantidad</th><th>Medida</th><th>Material</th><th>Precio Unit.</th><th>Total</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="fila" style="justify-content:flex-end"><span class="total">Total: <span id="lblTotal">0</span></span></div>
+        </div>
+        <div class="tab-panel" id="listado">
+            <div class="etched fila">
+                <div th:replace="~{fragments :: filtros('VIG:Vigentes,COM:Facturadas,ANU:Anuladas')}"></div>
+                <label for="fSuc">en</label><select id="fSuc"></select>
+            </div>
+            <div class="tabla-wrap">
+                <table class="grilla" id="tLista">
+                    <thead><tr><th>Codigo</th><th>S/ Pedido Nº</th><th>Proveedor</th><th>Sucursal</th><th>T. de pago</th><th>Fecha</th><th>Total</th><th>Estado</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="tabla-wrap chica">
+                <table class="grilla" id="tListaDet">
+                    <thead><tr><th>Cantidad</th><th>Material</th><th>Precio Unit.</th><th>Total</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<div th:replace="~{fragments :: botonera}"></div>
+
+<script th:inline="javascript">
+(function () {
+    const APROBADOR = /*[[${u.aprobador}]]*/ false;
+    const { $ } = Z;
+    let det = [];
+
+    function pintar() {
+        Z.tabla('#tDet', det, [
+            { html: r => { const c = Object.assign(document.createElement('input'), { type: 'checkbox', checked: r.inc });
+                c.onchange = () => { r.inc = c.checked; total(); }; return c; }, cls: 'c' },
+            { html: r => Object.assign(document.createElement('input'), { value: r.det_cant, className: 'num solo-num',
+                oninput: e => { r.det_cant = e.target.value; total(); } }) },
+            { c: 'un_cod' }, { c: 'mat' },
+            { html: r => Object.assign(document.createElement('input'), { value: r.precio, className: 'num solo-num',
+                oninput: e => { r.precio = e.target.value; total(); } }) },
+            { html: r => '<span class="sub"></span>', cls: 'n' }
+        ], { vacio: 'Seleccione un pedido aprobado' });
+        total();
+    }
+    function total() {
+        let t = 0;
+        Z.$$('#tDet tbody tr').forEach((tr, i) => {
+            const r = det[i]; if (!r) return;
+            const s = Z.num(r.det_cant) * Z.num(r.precio);
+            tr.querySelector('.sub').textContent = Z.fmtNum(s);
+            if (r.inc) t += s;
+        });
+        $('#lblTotal').textContent = Z.fmtNum(t);
+    }
+
+    $('#cboPed').onchange = async () => {
+        det = [];
+        if ($('#cboPed').value) {
+            const d = await Z.q('ped_det_pend', { cod: $('#cboPed').value });
+            det = (d || []).map(x => Object.assign(x, { inc: true, precio: x.mat_precio }));
+        }
+        pintar();
+    };
+
+    Z.mov({
+        key: 'ordc',
+        sinAgregar: !APROBADOR,
+        lista: { q: 'ord_lista', tabla: '#tLista', cod: 'ord_nro',
+            cols: [{ c: 'ord_nro', f: 'n' }, { c: 'ped_cod', f: 'n' }, { c: 'prov' }, { c: 'suc_des' }, { c: 'tip_des' },
+                   { c: 'date_' }, { c: 'total', f: 'n' }, { c: 'est_cod' }] },
+        det: { q: 'ord_det', tabla: '#tListaDet',
+            cols: [{ c: 'det_cant', f: 'n' }, { c: 'mat' }, { c: 'det_precio', f: 'n' }, { c: 'total', f: 'n' }] },
+        puedeAnular: r => r.est_cod === 'VIG' && APROBADOR,
+        async nuevo() {
+            $('#txtCod').value = '(automático)';
+            $('#txtDate').value = new Date().toLocaleDateString('es-PY');
+            await Z.cargarCombo('#cboPed', 'ped_para_orden');
+            det = []; pintar();
+            $('#cboPed').focus();
+        },
+        limpiar() { det = []; pintar(); },
+        async guardar() {
+            if (!(await Z.requeridos($('#edicion')))) return null;
+            const sel = det.filter(d => d.inc);
+            if (!sel.length) { await Z.msg('No se puede guardar una Orden sin detalles'); return null; }
+            if (sel.some(d => Z.num(d.det_cant) <= 0 || Z.num(d.precio) <= 0)) {
+                await Z.msg('Las cantidades y precios deben ser mayores a cero'); return null;
+            }
+            return {
+                cab: { ped_cod: $('#cboPed').value, prov_cod: $('#cboProv').value, tip_cod: $('#cboTpag').value },
+                det: sel.map(d => ({ mat_cod: d.mat_cod, cant: Z.num(d.det_cant), precio: Z.num(d.precio) }))
+            };
+        }
+    });
+    Z.cargarCombo('#cboProv', 'cbo_prov');
+    Z.cargarCombo('#cboTpag', 'cbo_tpag');
+    Z.cargarCombo('#fSuc', 'cbo_suc_otras', {}, 'Esta Sucursal');
+})();
+</script>
+</body>
+</html>

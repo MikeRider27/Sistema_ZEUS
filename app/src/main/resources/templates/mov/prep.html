@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head(${mov.titulo})}"></head>
+<body class="ventana">
+<div class="tabs" id="tabs">
+    <div class="tab-bar"><button type="button">Edicion</button><button type="button">Listado</button></div>
+    <div class="tab-body">
+        <div class="tab-panel" id="edicion">
+            <div class="etched form-grid">
+                <label for="txtCod">Codigo</label><input type="text" id="txtCod" class="cod" disabled>
+                <label for="txtVto" class="req">Valido hasta</label><input type="date" id="txtVto">
+                <label for="cboEnt" class="req">Recepcion Nº</label><select id="cboEnt" class="ancho"></select>
+                <label for="txtSeg">Cia. de Seguro</label><input type="text" id="txtSeg" disabled>
+                <label for="txtSin">Siniestro Nº</label><input type="text" id="txtSin" disabled>
+            </div>
+            <fieldset class="etched">
+                <legend>Reparacion de Piezas</legend>
+                <div class="fila">
+                    <label for="cboPza">Pieza</label><select id="cboPza" class="crece"></select>
+                    <label for="cboDam">Nivel de Daño</label><select id="cboDam"></select>
+                    <label for="txtPrePza">Precio</label><input type="text" id="txtPrePza" class="num solo-num" size="10">
+                    <button type="button" class="btn chico" id="btnAddPza"><img src="/img/agregar.png" alt="">Agregar</button>
+                </div>
+                <div class="tabla-wrap chica" style="margin-top:6px">
+                    <table class="grilla" id="tPza"><thead><tr><th>Pieza</th><th>Nivel de Daño</th><th>Precio</th><th></th></tr></thead><tbody></tbody></table>
+                </div>
+            </fieldset>
+            <fieldset class="etched">
+                <legend>Trabajos Adicionales</legend>
+                <div class="fila">
+                    <label for="cboTrab">Trabajo</label><select id="cboTrab" class="crece"></select>
+                    <label for="txtPreTrab">Costo</label><input type="text" id="txtPreTrab" class="num solo-num" size="10">
+                    <button type="button" class="btn chico" id="btnAddTrab"><img src="/img/agregar.png" alt="">Agregar</button>
+                </div>
+                <div class="tabla-wrap chica" style="margin-top:6px;height:100px">
+                    <table class="grilla" id="tTrab"><thead><tr><th>Trabajo</th><th>Costo</th><th></th></tr></thead><tbody></tbody></table>
+                </div>
+            </fieldset>
+            <div class="fila" style="justify-content:flex-end"><span class="total">Total Presupuestado: <span id="lblTotal">0</span></span></div>
+        </div>
+        <div class="tab-panel" id="listado">
+            <div class="etched" th:insert="~{fragments :: filtros('VIG:Vigentes,APR:Aprobados,OT:Con O.T.,RCH:Rechazados,ANU:Anulados')}"></div>
+            <div class="tabla-wrap">
+                <table class="grilla" id="tLista">
+                    <thead><tr><th>#</th><th>Recepcion</th><th>Cia. de Seguro</th><th>Asegurado</th><th>Vehiculo</th><th>Fecha</th><th>Vence</th><th>Total</th><th>Estado</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="fila" style="align-items:stretch">
+                <div class="tabla-wrap chica crece">
+                    <table class="grilla" id="tListaDet"><thead><tr><th>Pieza</th><th>Daño</th><th>Precio</th></tr></thead><tbody></tbody></table>
+                </div>
+                <div class="tabla-wrap chica crece">
+                    <table class="grilla" id="tListaTrab"><thead><tr><th>Trabajo</th><th>Costo</th></tr></thead><tbody></tbody></table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="botonera">
+    <div class="izq">
+        <button type="button" class="btn" id="btnEdit"><img src="/img/editar.png" alt="">Editar</button>
+        <button type="button" class="btn" id="btnAprove"><img src="/img/guardar.png" alt="">Aprobar</button>
+        <button type="button" class="btn" id="btnRech"><img src="/img/stop.png" alt="">Rechazar</button>
+    </div>
+    <button type="button" class="btn" id="btnAdd"><img src="/img/agregar.png" alt="">Agregar</button>
+    <button type="button" class="btn" id="btnNull"><img src="/img/anular.png" alt="">Anular</button>
+    <button type="button" class="btn" id="btnSave"><img src="/img/guardar.png" alt="">Guardar</button>
+    <button type="button" class="btn" id="btnCancel"><img src="/img/cancelar.png" alt="">Cancelar</button>
+    <button type="button" class="btn" id="btnExit"><img src="/img/salir.png" alt="">Salir</button>
+</div>
+
+<script th:inline="javascript">
+(function () {
+    const APROBADOR = /*[[${u.aprobador}]]*/ false;
+    const { $ } = Z;
+    let pzas = [], trabs = [];
+    const quitar = (arr) => (r, i) => {
+        const b = Object.assign(document.createElement('button'), { type: 'button', className: 'btn chico', textContent: 'Quitar' });
+        b.onclick = () => { arr.splice(i, 1); pintar(); };
+        return b;
+    };
+
+    function pintar() {
+        Z.tabla('#tPza', pzas, [{ c: 'pie_des' }, { c: 'dam_des' }, { c: 'det_precio', f: 'n' }, { html: quitar(pzas) }], { vacio: 'Sin piezas' });
+        Z.tabla('#tTrab', trabs, [{ c: 'trab_des' }, { c: 'det_precio', f: 'n' }, { html: quitar(trabs) }], { vacio: 'Sin trabajos adicionales' });
+        $('#lblTotal').textContent = Z.fmtNum([...pzas, ...trabs].reduce((a, d) => a + Number(d.det_precio), 0));
+    }
+
+    // precio sugerido = precio de mano de obra de la pieza x % del nivel de daño
+    function sugerido(pza, dam) { return pza && dam ? Math.round(pza.pie_precio * dam.dam_porc / 100) : ''; }
+    const filaDe = (sel, cod) => (Z.$(sel)._rows || []).find(r => String(r.cod) === String(cod));
+
+    $('#cboPza').onchange = $('#cboDam').onchange = () => $('#txtPrePza').value = sugerido(Z.filaCombo('#cboPza'), Z.filaCombo('#cboDam'));
+    $('#cboTrab').onchange = () => { const t = Z.filaCombo('#cboTrab'); $('#txtPreTrab').value = t ? t.trab_precio : ''; };
+
+    $('#btnAddPza').onclick = async () => {
+        const p = Z.filaCombo('#cboPza'), d = Z.filaCombo('#cboDam'), pre = Z.num($('#txtPrePza').value);
+        if (!p || !d) { await Z.msg('Seleccione la Pieza y el Nivel de Daño'); return; }
+        if (pre <= 0) { await Z.msg('Ingrese el precio'); return $('#txtPrePza').focus(); }
+        if (pzas.some(x => x.pie_cod === p.cod)) { await Z.msg('La pieza ya fue agregada'); return; }
+        pzas.push({ pie_cod: p.cod, pie_des: p.des, dam_cod: d.cod, dam_des: d.des, det_precio: pre });
+        pintar();
+    };
+    $('#btnAddTrab').onclick = async () => {
+        const t = Z.filaCombo('#cboTrab'), pre = Z.num($('#txtPreTrab').value);
+        if (!t) { await Z.msg('Seleccione el Trabajo'); return; }
+        if (pre <= 0) { await Z.msg('Ingrese el costo'); return $('#txtPreTrab').focus(); }
+        if (trabs.some(x => x.trab_cod === t.cod)) { await Z.msg('El trabajo ya fue agregado'); return; }
+        trabs.push({ trab_cod: t.cod, trab_des: t.des, det_precio: pre });
+        pintar();
+    };
+
+    // al elegir la recepcion se cargan las piezas dañadas registradas con su precio sugerido
+    $('#cboEnt').onchange = async () => {
+        const e = Z.filaCombo('#cboEnt');
+        $('#txtSeg').value = e ? e.seg_des : '';
+        $('#txtSin').value = e ? (e.ent_sin || '') : '';
+        pzas = [];
+        if (e) {
+            const d = await Z.q('ent_det', { cod: e.cod }) || [];
+            pzas = d.map(x => Object.assign(x, { det_precio: sugerido(filaDe('#cboPza', x.pie_cod), filaDe('#cboDam', x.dam_cod)) || 0 }));
+        }
+        pintar();
+    };
+
+    const m = Z.mov({
+        key: 'prep',
+        lista: { q: 'prep_lista', tabla: '#tLista', cod: 'prep_cod',
+            cols: [{ c: 'prep_cod', f: 'n' }, { c: 'ent_cod', f: 'n' }, { c: 'seg_des' }, { c: 'cli' }, { c: 'veh' }, { c: 'date_' },
+                   { c: 'vto' }, { c: 'total', f: 'n' }, { c: 'est_cod' }] },
+        det: { q: 'prep_det_pie', tabla: '#tListaDet', cols: [{ c: 'pie_des' }, { c: 'dam_des' }, { c: 'det_precio', f: 'n' }] },
+        async alSeleccionar(r) {
+            const t = await Z.q('prep_det_trab', { cod: r.prep_cod });
+            if (t) Z.tabla('#tListaTrab', t, [{ c: 'trab_des' }, { c: 'det_precio', f: 'n' }], { vacio: 'Sin trabajos' });
+        },
+        puedeAnular: r => r.est_cod === 'VIG' || r.est_cod === 'APR',
+        acciones: [
+            { btn: '#btnEdit', puede: r => r.est_cod === 'VIG' },
+            { btn: '#btnAprove', puede: r => r.est_cod === 'VIG' && APROBADOR },
+            { btn: '#btnRech', puede: r => r.est_cod === 'VIG' || r.est_cod === 'APR' }
+        ],
+        async nuevo() {
+            $('#txtCod').value = '(automático)';
+            const v = new Date(); v.setDate(v.getDate() + 15);
+            $('#txtVto').value = v.toISOString().slice(0, 10);
+            await Z.cargarCombo('#cboEnt', 'ent_para_prep');
+            $('#cboEnt').disabled = false;
+            pzas = []; trabs = []; pintar();
+            $('#cboEnt').focus();
+        },
+        limpiar() { pzas = []; trabs = []; pintar(); Z.tabla('#tListaTrab', [], [{}, {}], { vacio: '' }); },
+        async guardar(ban) {
+            if (!(await Z.requeridos($('#edicion')))) return null;
+            if (!pzas.length && !trabs.length) { await Z.msg('No se puede guardar un Presupuesto sin detalles'); return null; }
+            if (pzas.some(p => Z.num(p.det_precio) <= 0)) { await Z.msg('Todas las piezas deben tener precio'); return null; }
+            return {
+                cab: { ent_cod: $('#cboEnt').value, prep_vto: $('#txtVto').value },
+                det: { piezas: pzas.map(p => ({ pie_cod: p.pie_cod, dam_cod: p.dam_cod, precio: Z.num(p.det_precio) })),
+                       trabajos: trabs.map(t => ({ trab_cod: t.trab_cod, precio: Z.num(t.det_precio) })) },
+                mensaje: ban === 1 ? undefined : 'Presupuesto modificado con Éxito'
+            };
+        }
+    });
+
+    $('#btnEdit').onclick = async () => {
+        const r = m.sel;
+        const [p, t, cab] = await Promise.all([Z.q('prep_det_pie', { cod: r.prep_cod }), Z.q('prep_det_trab', { cod: r.prep_cod }),
+                                              Z.q('prep_uno', { cod: r.prep_cod })]);
+        if (!p || !t || !cab || !cab[0]) return;
+        m.editar(2);
+        $('#txtCod').value = r.prep_cod;
+        Z.combo('#cboEnt', [{ cod: r.ent_cod, des: `RECEPCION Nº ${r.ent_cod} - ${r.veh} - ${r.cli}` }], null);
+        $('#cboEnt').disabled = true;
+        $('#txtSeg').value = r.seg_des;
+        $('#txtVto').value = cab[0].prep_vto;
+        pzas = p; trabs = t; pintar();
+    };
+    $('#btnAprove').onclick = async () => {
+        if (!(await Z.confirm('¿Confirma la aprobación del presupuesto por parte del cliente / cia. de seguros?'))) return;
+        if (await m.ejecutar(4, m.sel.prep_cod, {}, null, 'Presupuesto Aprobado') !== null) m.terminar();
+    };
+    $('#btnRech').onclick = async () => {
+        if (!(await Z.confirm('¿Desea registrar el RECHAZO de este presupuesto?\nLa recepción quedará disponible para un nuevo presupuesto.'))) return;
+        if (await m.ejecutar(5, m.sel.prep_cod, {}, null, 'Presupuesto Rechazado') !== null) m.terminar();
+    };
+    Z.cargarCombo('#cboPza', 'cbo_pza');
+    Z.cargarCombo('#cboDam', 'cbo_dam');
+    Z.cargarCombo('#cboTrab', 'cbo_trab');
+})();
+</script>
+</body>
+</html>

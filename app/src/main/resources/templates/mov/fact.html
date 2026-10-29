@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head(${mov.titulo})}"></head>
+<body class="ventana">
+<div class="etched fila" id="panCaja"><img src="/img/caja.png" alt="" width="20"><span id="lblCaja">Verificando caja...</span></div>
+<div class="tabs" id="tabs">
+    <div class="tab-bar"><button type="button">Edicion</button><button type="button">Listado</button></div>
+    <div class="tab-body">
+        <div class="tab-panel" id="edicion">
+            <div class="etched form-grid">
+                <label for="txtCod">Fact. Nº</label><input type="text" id="txtCod" class="cod" disabled>
+                <label for="cboTpag" class="req">Condicion</label><select id="cboTpag"></select>
+                <label for="cboOt" class="req">O.T. Nº</label><select id="cboOt" class="ancho"></select>
+                <label for="txtCli">Asegurado</label><input type="text" id="txtCli" disabled>
+                <label for="txtSeg">Cia. de Seguro</label><input type="text" id="txtSeg" disabled>
+                <label>Facturar a</label>
+                <div class="fila ancho">
+                    <label><input type="radio" name="aQuien" id="rCli" value="cli" checked> Asegurado</label>
+                    <label><input type="radio" name="aQuien" id="rSeg" value="seg"> Cia. de Seguros</label>
+                </div>
+            </div>
+            <div class="ayuda">Los ítems se generan del presupuesto aprobado (piezas y trabajos) más los materiales consumidos en la O.T.</div>
+            <div class="tabla-wrap">
+                <table class="grilla" id="tDet"><thead><tr><th>Descripcion</th><th>Precio</th></tr></thead><tbody></tbody></table>
+            </div>
+            <div class="fila" style="justify-content:flex-end"><span class="total">Total Presupuestado: <span id="lblTotal">0</span></span></div>
+        </div>
+        <div class="tab-panel" id="listado">
+            <div class="etched" th:insert="~{fragments :: filtros('PEN:Pendientes,COB:Cobradas,ANU:Anuladas')}"></div>
+            <div class="tabla-wrap">
+                <table class="grilla" id="tLista">
+                    <thead><tr><th>#</th><th>Fact. Nº</th><th>Cliente</th><th>Vehiculo</th><th>Siniestro</th><th>F. de Fact.</th><th>Condicion</th><th>Total</th><th>IVA 10%</th><th>Cobrado</th><th>Estado</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="tabla-wrap chica">
+                <table class="grilla" id="tListaDet"><thead><tr><th>Item</th><th>Descripcion</th><th>Cant.</th><th>Precio Unit.</th><th>Impuesto</th><th>Total</th></tr></thead><tbody></tbody></table>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="botonera">
+    <div class="izq"><button type="button" class="btn" id="btnPrint"><img src="/img/informe.png" alt="">Imprimir</button></div>
+    <button type="button" class="btn" id="btnAdd"><img src="/img/agregar.png" alt="">Agregar</button>
+    <button type="button" class="btn" id="btnNull"><img src="/img/anular.png" alt="">Anular</button>
+    <button type="button" class="btn" id="btnSave"><img src="/img/guardar.png" alt="">Guardar</button>
+    <button type="button" class="btn" id="btnCancel"><img src="/img/cancelar.png" alt="">Cancelar</button>
+    <button type="button" class="btn" id="btnExit"><img src="/img/salir.png" alt="">Salir</button>
+</div>
+
+<div id="hoja" class="hoja" hidden></div>
+<style>@media print { body.ventana > :not(#hoja) { display: none !important; } #hoja { display: block !important; } }</style>
+
+<script th:inline="javascript">
+(function () {
+    const APROBADOR = /*[[${u.aprobador}]]*/ false;
+    const SUC = /*[[${u.suc}]]*/ '';
+    const { $ } = Z;
+    let caja = null;
+
+    async function verCaja() {
+        const r = await Z.q('ape_mia');
+        caja = r && r[0];
+        $('#lblCaja').textContent = caja ? `Caja abierta: ${caja.caj_des} desde ${caja.date_}`
+            : 'No tiene una caja abierta. Abra una caja en "Registrar Apertura/Cierre" para poder facturar.';
+        $('#panCaja').style.color = caja ? '' : '#c00';
+    }
+
+    $('#cboOt').onchange = async () => {
+        const o = Z.filaCombo('#cboOt');
+        $('#txtCli').value = o ? o.cli : '';
+        $('#txtSeg').value = o ? o.seg_des : '';
+        $('#rSeg').disabled = !(o && o.seg_cod);
+        $('#rSeg').checked = !!(o && o.seg_cod);
+        $('#rCli').checked = !$('#rSeg').checked;
+        let items = [];
+        if (o) {
+            const [p, t] = await Promise.all([Z.q('prep_det_pie', { cod: o.prep_cod }), Z.q('prep_det_trab', { cod: o.prep_cod })]);
+            items = [...(p || []).map(x => ({ des: `REPARACION ${x.pie_des} (${x.dam_des})`, pre: x.det_precio })),
+                     ...(t || []).map(x => ({ des: x.trab_des, pre: x.det_precio }))];
+        }
+        Z.tabla('#tDet', items, [{ c: 'des' }, { c: 'pre', f: 'n' }], { vacio: 'Seleccione una O.T. terminada' });
+        $('#lblTotal').textContent = Z.fmtNum(o ? o.total : 0);
+    };
+
+    const m = Z.mov({
+        key: 'fact',
+        lista: { q: 'fact_lista', tabla: '#tLista', cod: 'fact_cod',
+            cols: [{ c: 'fact_cod', f: 'n' }, { c: 'fact_nro' }, { c: 'cliente' }, { c: 'veh' }, { c: 'ent_sin' }, { c: 'date_' }, { c: 'tip_des' },
+                   { c: 'total', f: 'n' }, { c: 'iva', f: 'n' }, { c: 'cobrado', f: 'n' }, { c: 'est_cod' }] },
+        det: { q: 'fact_det', tabla: '#tListaDet',
+            cols: [{ c: 'item', f: 'n' }, { c: 'item_des' }, { c: 'det_cant', f: 'n' }, { c: 'det_precio', f: 'n' }, { c: 'imp_des' }, { c: 'total', f: 'n' }] },
+        puedeAnular: r => r.est_cod === 'PEN' && APROBADOR,
+        acciones: [{ btn: '#btnPrint', puede: r => r.est_cod !== 'ANU' }],
+        async nuevo() {
+            await verCaja();
+            if (!caja) { await Z.msg('Debe abrir una caja antes de facturar'); m.terminar(); return; }
+            $('#txtCod').value = '(automático)';
+            await Z.cargarCombo('#cboOt', 'ot_facturables');
+            $('#cboOt').onchange();
+            $('#cboOt').focus();
+        },
+        async guardar() {
+            if (!(await Z.requeridos($('#edicion')))) return null;
+            return { cab: { ot_cod: $('#cboOt').value, tip_cod: $('#cboTpag').value, a_seguro: $('#rSeg').checked },
+                     mensaje: 'Factura emitida con Éxito' };
+        }
+    });
+
+    $('#btnPrint').onclick = async () => {
+        const r = m.sel;
+        const [f, d] = await Promise.all([Z.q('fact_uno', { cod: r.fact_cod }), Z.q('fact_det', { cod: r.fact_cod })]);
+        if (!f || !f[0] || !d) return;
+        const c = f[0], h = $('#hoja');
+        h.innerHTML = `<h2>FACTURA <span data-k="tip_des"></span> Nº <span data-k="fact_nro"></span></h2>
+            <div class="sub">Timbrado Nº <span data-k="tim_nro"></span> - Sucursal: <span id="pSuc"></span></div>
+            <div class="form-grid" style="margin-bottom:10px">
+              <label>Fecha</label><span data-k="date_"></span><label>Cliente</label><span data-k="cliente"></span>
+              <label>Vehiculo</label><span data-k="veh"></span><label>Siniestro Nº</label><span data-k="ent_sin"></span></div>
+            <table class="grilla"><thead><tr><th>Cant.</th><th>Descripcion</th><th>Precio Unit.</th><th>Gravadas 10%</th></tr></thead><tbody></tbody>
+            <tfoot><tr><td colspan="3">TOTAL A PAGAR</td><td class="n" id="pTot"></td></tr>
+                   <tr><td colspan="3">LIQUIDACION DEL IVA (10%)</td><td class="n" id="pIva"></td></tr></tfoot></table>`;
+        h.querySelectorAll('[data-k]').forEach(e => e.textContent = c[e.dataset.k] ?? '');
+        $('#pSuc', h).textContent = SUC;
+        $('#pTot', h).textContent = Z.fmtNum(c.total);
+        $('#pIva', h).textContent = Z.fmtNum(c.iva);
+        Z.tabla(h.querySelector('table'), d, [{ c: 'det_cant', f: 'n' }, { c: 'item_des' }, { c: 'det_precio', f: 'n' }, { c: 'total', f: 'n' }]);
+        window.print();
+    };
+
+    Z.cargarCombo('#cboTpag', 'cbo_tpag', {}, null);
+    verCaja();
+})();
+</script>
+</body>
+</html>

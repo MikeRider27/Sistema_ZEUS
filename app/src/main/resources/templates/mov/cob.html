@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head(${mov.titulo})}"></head>
+<body class="ventana">
+<div class="etched fila" id="panCaja"><img src="/img/caja.png" alt="" width="20"><span id="lblCaja">Verificando caja...</span></div>
+<div class="tabs" id="tabs">
+    <div class="tab-bar"><button type="button">Edicion</button><button type="button">Listado</button></div>
+    <div class="tab-body">
+        <div class="tab-panel" id="edicion">
+            <div class="etched form-grid">
+                <label for="txtCod">Codigo</label><input type="text" id="txtCod" class="cod" disabled>
+                <label for="txtSaldo">Saldo</label><input type="text" id="txtSaldo" class="num" disabled>
+                <label for="cboFact" class="req">Factura Nº</label><select id="cboFact" class="ancho"></select>
+            </div>
+            <fieldset class="etched">
+                <legend>Formas de Cobro</legend>
+                <div class="fila">
+                    <label for="cboFcob">Forma</label><select id="cboFcob"></select>
+                    <label for="cboBan">Banco</label><select id="cboBan" disabled></select>
+                    <label for="txtRef">Nº Ref.</label><input type="text" id="txtRef" class="upper" size="12" maxlength="30" disabled>
+                    <label for="txtMonto">Monto</label><input type="text" id="txtMonto" class="num solo-num" size="12">
+                    <button type="button" class="btn chico" id="btnAddDet"><img src="/img/agregar.png" alt="">Agregar</button>
+                </div>
+            </fieldset>
+            <div class="tabla-wrap">
+                <table class="grilla" id="tDet"><thead><tr><th>Forma de Cobro</th><th>Banco</th><th>Nº Ref.</th><th>Monto</th><th></th></tr></thead><tbody></tbody></table>
+            </div>
+            <div class="fila" style="justify-content:flex-end"><span class="total">Total Cobrado: <span id="lblTotal">0</span></span></div>
+        </div>
+        <div class="tab-panel" id="listado">
+            <div class="etched" th:insert="~{fragments :: filtros('VIG:Vigentes,ANU:Anulados')}"></div>
+            <div class="tabla-wrap">
+                <table class="grilla" id="tLista">
+                    <thead><tr><th>#</th><th>Factura Nº</th><th>Cliente</th><th>Caja</th><th>Fecha</th><th>Cajero</th><th>Total</th><th>Estado</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="tabla-wrap chica">
+                <table class="grilla" id="tListaDet"><thead><tr><th>Forma de Cobro</th><th>Banco</th><th>Nº Ref.</th><th>Monto</th></tr></thead><tbody></tbody></table>
+            </div>
+        </div>
+    </div>
+</div>
+<div th:replace="~{fragments :: botonera}"></div>
+
+<script th:inline="javascript">
+(function () {
+    const APROBADOR = /*[[${u.aprobador}]]*/ false;
+    const { $ } = Z;
+    let det = [], caja = null;
+
+    async function verCaja() {
+        const r = await Z.q('ape_mia');
+        caja = r && r[0];
+        $('#lblCaja').textContent = caja ? `Caja abierta: ${caja.caj_des} desde ${caja.date_}`
+            : 'No tiene una caja abierta. Abra una caja en "Registrar Apertura/Cierre" para poder cobrar.';
+        $('#panCaja').style.color = caja ? '' : '#c00';
+    }
+    function pintar() {
+        Z.tabla('#tDet', det, [{ c: 'fcob_des' }, { c: 'ban_des' }, { c: 'ref' }, { c: 'monto', f: 'n' },
+            { html: (r, i) => { const b = Object.assign(document.createElement('button'), { type: 'button', className: 'btn chico', textContent: 'Quitar' });
+                b.onclick = () => { det.splice(i, 1); pintar(); }; return b; } }], { vacio: 'Agregue las formas de cobro' });
+        $('#lblTotal').textContent = Z.fmtNum(det.reduce((a, d) => a + d.monto, 0));
+    }
+    const saldo = () => { const f = Z.filaCombo('#cboFact'); return f ? Number(f.saldo) : 0; };
+
+    $('#cboFact').onchange = () => {
+        $('#txtSaldo').value = Z.fmtNum(saldo());
+        $('#txtMonto').value = saldo() - det.reduce((a, d) => a + d.monto, 0) || '';
+    };
+    $('#cboFcob').onchange = () => {
+        const f = Z.filaCombo('#cboFcob');
+        $('#cboBan').disabled = $('#txtRef').disabled = !(f && f.fcob_ban);
+        if (!(f && f.fcob_ban)) { $('#cboBan').value = ''; $('#txtRef').value = ''; }
+    };
+    $('#btnAddDet').onclick = async () => {
+        const f = Z.filaCombo('#cboFcob'), b = Z.filaCombo('#cboBan'), monto = Z.num($('#txtMonto').value);
+        if (!$('#cboFact').value) { await Z.msg('Seleccione la Factura'); return; }
+        if (!f) { await Z.msg('Seleccione la Forma de Cobro'); return; }
+        if (f.fcob_ban && (!b || !$('#txtRef').value.trim())) { await Z.msg('Esta forma de cobro requiere Banco y Nº de referencia'); return; }
+        if (monto <= 0) { await Z.msg('El monto debe ser mayor a cero'); return $('#txtMonto').focus(); }
+        if (det.reduce((a, d) => a + d.monto, 0) + monto > saldo()) { await Z.msg('El total cobrado no puede superar el saldo de la factura'); return; }
+        det.push({ fcob_cod: f.cod, fcob_des: f.des, ban_cod: b ? b.cod : null, ban_des: b ? b.des : '', ref: $('#txtRef').value.trim(), monto });
+        pintar();
+        $('#cboFact').disabled = true;
+        $('#txtMonto').value = saldo() - det.reduce((a, d) => a + d.monto, 0) || '';
+    };
+
+    const m = Z.mov({
+        key: 'cob',
+        lista: { q: 'cob_lista', tabla: '#tLista', cod: 'cob_cod',
+            cols: [{ c: 'cob_cod', f: 'n' }, { c: 'fact_nro' }, { c: 'cliente' }, { c: 'caj_des' }, { c: 'date_' }, { c: 'emp' },
+                   { c: 'total', f: 'n' }, { c: 'est_cod' }] },
+        det: { q: 'cob_det', tabla: '#tListaDet', cols: [{ c: 'fcob_des' }, { c: 'ban_des' }, { c: 'det_ref' }, { c: 'det_monto', f: 'n' }] },
+        puedeAnular: r => r.est_cod === 'VIG' && APROBADOR,
+        async nuevo() {
+            await verCaja();
+            if (!caja) { await Z.msg('Debe abrir una caja antes de cobrar'); m.terminar(); return; }
+            $('#txtCod').value = '(automático)';
+            $('#cboFact').disabled = false;
+            await Z.cargarCombo('#cboFact', 'fact_pend');
+            det = []; pintar();
+            $('#cboFact').focus();
+        },
+        limpiar() { det = []; pintar(); $('#cboFact').disabled = false; $('#cboBan').disabled = $('#txtRef').disabled = true; },
+        async guardar() {
+            if (!caja) { await Z.msg('Debe abrir una caja antes de cobrar'); return null; }
+            if (!det.length) { await Z.msg('Debe ingresar al menos una forma de cobro'); return null; }
+            const tot = det.reduce((a, d) => a + d.monto, 0);
+            if (tot < saldo() && !(await Z.confirm(`Se registrará un cobro PARCIAL de ${Z.fmtNum(tot)}.\nSaldo pendiente: ${Z.fmtNum(saldo() - tot)}. ¿Continuar?`))) return null;
+            return { cab: { fact_cod: $('#cboFact').value },
+                     det: det.map(d => ({ fcob_cod: d.fcob_cod, ban_cod: d.ban_cod, ref: d.ref, monto: d.monto })) };
+        }
+    });
+    Z.cargarCombo('#cboFcob', 'cbo_fcob');
+    Z.cargarCombo('#cboBan', 'cbo_ban');
+    verCaja();
+})();
+</script>
+</body>
+</html>

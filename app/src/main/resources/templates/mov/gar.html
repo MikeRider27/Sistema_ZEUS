@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head(${mov.titulo})}"></head>
+<body class="ventana">
+<div class="tabs" id="tabs">
+    <div class="tab-bar"><button type="button">Edicion</button><button type="button">Listado</button></div>
+    <div class="tab-body">
+        <div class="tab-panel" id="edicion">
+            <div class="etched form-grid">
+                <label for="txtCod">Codigo</label><input type="text" id="txtCod" class="cod" disabled>
+                <label for="txtFecha">Fecha</label><input type="text" id="txtFecha" disabled>
+                <label for="cboOt" class="req">O.T. Nº</label><select id="cboOt" class="ancho"></select>
+                <label for="cboMot" class="req">Motivo de Garantia</label><select id="cboMot" class="ancho"></select>
+                <label for="txtObs" class="req">Descripcion del Reclamo</label><textarea id="txtObs" class="upper ancho" rows="4" maxlength="500"></textarea>
+            </div>
+            <div class="ayuda">Solo trabajos terminados o entregados, dentro de los 6 meses de emitida la O.T.</div>
+        </div>
+        <div class="tab-panel" id="listado">
+            <div class="etched" th:insert="~{fragments :: filtros('VIG:Pendientes,TER:Atendidas,ANU:Anuladas')}"></div>
+            <div class="tabla-wrap">
+                <table class="grilla" id="tLista">
+                    <thead><tr><th>#</th><th>O.T. Nº</th><th>Vehiculo</th><th>Asegurado</th><th>Motivo</th><th>Fecha</th><th>Reclamo</th><th>Estado</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="botonera">
+    <div class="izq"><button type="button" class="btn" id="btnCerrar"><img src="/img/guardar.png" alt="">Marcar Atendida</button></div>
+    <button type="button" class="btn" id="btnAdd"><img src="/img/agregar.png" alt="">Agregar</button>
+    <button type="button" class="btn" id="btnNull"><img src="/img/anular.png" alt="">Anular</button>
+    <button type="button" class="btn" id="btnSave"><img src="/img/guardar.png" alt="">Guardar</button>
+    <button type="button" class="btn" id="btnCancel"><img src="/img/cancelar.png" alt="">Cancelar</button>
+    <button type="button" class="btn" id="btnExit"><img src="/img/salir.png" alt="">Salir</button>
+</div>
+<script>
+(function () {
+    const { $ } = Z;
+    const m = Z.mov({
+        key: 'gar',
+        lista: { q: 'gar_lista', tabla: '#tLista', cod: 'gar_cod',
+            cols: [{ c: 'gar_cod', f: 'n' }, { c: 'ot_cod', f: 'n' }, { c: 'veh' }, { c: 'cli' }, { c: 'motg_des' }, { c: 'date_' },
+                   { c: 'gar_obs' }, { c: 'est_cod' }] },
+        acciones: [{ btn: '#btnCerrar', puede: r => r.est_cod === 'VIG' }],
+        async nuevo() {
+            $('#txtCod').value = '(automático)';
+            $('#txtFecha').value = new Date().toLocaleDateString('es-PY');
+            await Z.cargarCombo('#cboOt', 'ot_terminadas');
+            $('#cboOt').focus();
+        },
+        async guardar() {
+            if (!(await Z.requeridos($('#edicion')))) return null;
+            return { cab: { ot_cod: $('#cboOt').value, motg_cod: $('#cboMot').value, gar_obs: $('#txtObs').value } };
+        }
+    });
+    $('#btnCerrar').onclick = async () => {
+        if (!(await Z.confirm('¿Confirma que el reclamo de garantía fue atendido?'))) return;
+        if (await m.ejecutar(4, m.sel.gar_cod, {}, null, 'Garantía marcada como Atendida') !== null) m.terminar();
+    };
+    Z.cargarCombo('#cboMot', 'cbo_motg');
+})();
+</script>
+</body>
+</html>

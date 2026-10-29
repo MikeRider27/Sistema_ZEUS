@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head('Informe de Existencias')}"></head>
+<body class="ventana">
+<div class="etched barra-filtro no-print">
+    <label for="cboSuc">Sucursal</label><select id="cboSuc"></select>
+    <label><input type="checkbox" id="chkBajo"> Solo bajo el mínimo</label>
+    <button type="button" class="btn chico" id="btnGen"><img src="/img/refresh.png" alt="">Generar</button>
+</div>
+<div class="hoja">
+    <h2>INFORME DE EXISTENCIAS DE MATERIALES</h2>
+    <div class="sub" id="sub"></div>
+    <table class="grilla" id="tInf">
+        <thead><tr><th>Sucursal</th><th>Deposito</th><th>Material</th><th>U.M.</th><th>Exist. Min.</th><th>Existencia</th><th>No Disp.</th><th>Situacion</th></tr></thead>
+        <tbody></tbody>
+    </table>
+</div>
+<div class="botonera no-print">
+    <button type="button" class="btn" onclick="window.print()"><img src="/img/informe.png" alt="">Imprimir</button>
+    <button type="button" class="btn" id="btnExit" onclick="Z.salir()"><img src="/img/salir.png" alt="">Salir</button>
+</div>
+<script th:inline="javascript">
+(function () {
+    const USR = /*[[${u.user}]]*/ '';
+    const { $ } = Z;
+    async function generar() {
+        let rows = await Z.q('inf_stock', { suc: $('#cboSuc').value }) || [];
+        if ($('#chkBajo').checked) rows = rows.filter(r => r.bajo_min);
+        Z.tabla('#tInf', rows, [{ c: 'suc_des' }, { c: 'dep_des' }, { c: 'mat_des' }, { c: 'un_cod' }, { c: 'mat_min', f: 'n' },
+            { c: 'cant', f: 'n' }, { c: 'cant_no_disp', f: 'n' }, { html: r => r.bajo_min ? 'REPONER' : 'OK' }],
+            { claseFila: r => r.bajo_min ? 'bajo' : '' });
+        $('#sub').textContent = `${$('#cboSuc').selectedOptions[0].textContent} - Emitido el ${new Date().toLocaleString('es-PY')} por ${USR} - ${rows.length} registro(s)`;
+    }
+    $('#btnGen').onclick = generar;
+    Z.cargarCombo('#cboSuc', 'cbo_suc', {}, 'TODAS LAS SUCURSALES').then(generar);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head th:replace="~{fragments :: head(${mov.titulo})}"></head>
+<body class="ventana">
+<div class="tabs" id="tabs">
+    <div class="tab-bar"><button type="button">Edicion</button><button type="button">Listado</button></div>
+    <div class="tab-body">
+        <div class="tab-panel" id="edicion">
+            <div class="etched form-grid">
+                <label for="txtCod">Codigo</label><input type="text" id="txtCod" class="cod" disabled>
+                <label for="txtFecha" class="req">F. de Factura</label><input type="date" id="txtFecha">
+                <label for="cboOrd" class="req">S/ Orden Nº</label><select id="cboOrd" class="ancho"></select>
+                <label for="txtNro" class="req">Fact. Nº</label><input type="text" id="txtNro" placeholder="001-001-0000001" maxlength="15">
+                <label for="cboDep" class="req">Deposito</label><select id="cboDep"></select>
+            </div>
+            <div class="ayuda">Los materiales de la orden ingresan al stock del depósito elegido (puede cambiarlo por fila).</div>
+            <div class="tabla-wrap">
+                <table class="grilla" id="tDet">
+                    <thead><tr><th>Cantidad</th><th>Material</th><th>Deposito</th><th>Precio Unit.</th><th>Total</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="fila" style="justify-content:flex-end"><span class="total">Total: <span id="lblTotal">0</span></span></div>
+        </div>
+        <div class="tab-panel" id="listado">
+            <div class="etched fila">
+                <div th:replace="~{fragments :: filtros('VIG:Vigentes,ANU:Anuladas')}"></div>
+                <label for="fSuc">en</label><select id="fSuc"></select>
+            </div>
+            <div class="tabla-wrap">
+                <table class="grilla" id="tLista">
+                    <thead><tr><th>#</th><th>Proveedor</th><th>Pedido Nº</th><th>Orden Nº</th><th>Fact. Nº</th><th>Fecha</th><th>Sucursal</th><th>Total</th><th>Estado</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="tabla-wrap chica">
+                <table class="grilla" id="tListaDet">
+                    <thead><tr><th>Cantidad</th><th>Material</th><th>Deposito</th><th>Precio Unitario</th><th>Total</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<div th:replace="~{fragments :: botonera}"></div>
+
+<script th:inline="javascript">
+(function () {
+    const APROBADOR = /*[[${u.aprobador}]]*/ false;
+    const { $ } = Z;
+    let det = [], deps = [];
+
+    function pintar() {
+        Z.tabla('#tDet', det, [
+            { c: 'det_cant', f: 'n' }, { c: 'mat' },
+            { html: r => { const s = document.createElement('select'); Z.combo(s, deps, null); s.value = r.dep_cod || '';
+                s.onchange = () => r.dep_cod = s.value; return s; } },
+            { c: 'det_precio', f: 'n' }, { c: 'total', f: 'n' }
+        ], { vacio: 'Seleccione una orden de compra vigente' });
+        $('#lblTotal').textContent = Z.fmtNum(det.reduce((a, d) => a + Number(d.total), 0));
+    }
+
+    $('#cboOrd').onchange = async () => {
+        det = $('#cboOrd').value ? (await Z.q('ord_det', { cod: $('#cboOrd').value })) || [] : [];
+        det.forEach(d => d.dep_cod = $('#cboDep').value);
+        pintar();
+    };
+    $('#cboDep').onchange = () => { det.forEach(d => d.dep_cod = $('#cboDep').value); pintar(); };
+
+    Z.mov({
+        key: 'com',
+        lista: { q: 'com_lista', tabla: '#tLista', cod: 'com_cod',
+            cols: [{ c: 'com_cod', f: 'n' }, { c: 'prov' }, { c: 'ped_cod', f: 'n' }, { c: 'ord_nro', f: 'n' }, { c: 'com_nrofact' },
+                   { c: 'date_' }, { c: 'suc_des' }, { c: 'total', f: 'n' }, { c: 'est_cod' }] },
+        det: { q: 'com_det', tabla: '#tListaDet',
+            cols: [{ c: 'com_cant', f: 'n' }, { c: 'mat' }, { c: 'dep' }, { c: 'com_precio', f: 'n' }, { c: 'total', f: 'n' }] },
+        puedeAnular: r => r.est_cod === 'VIG' && APROBADOR,
+        async nuevo() {
+            $('#txtCod').value = '(automático)';
+            $('#txtFecha').value = Z.hoy();
+            await Z.cargarCombo('#cboOrd', 'ord_para_compra');
+            deps = await Z.cargarCombo('#cboDep', 'cbo_dep');
+            det = []; pintar();
+            $('#cboOrd').focus();
+        },
+        limpiar() { det = []; pintar(); },
+        async guardar() {
+            if (!(await Z.requeridos($('#edicion')))) return null;
+            if (!/^\d{3}-\d{3}-\d{7}$/.test($('#txtNro').value.trim())) {
+                await Z.msg('El Nro. de factura debe tener el formato 001-001-0000001'); $('#txtNro').focus(); return null;
+            }
+            if (!det.length) { await Z.msg('No se puede guardar una Factura sin detalles'); return null; }
+            if (det.some(d => !d.dep_cod)) { await Z.msg('Seleccione el depósito de cada material'); return null; }
+            return {
+                cab: { ord_nro: $('#cboOrd').value, com_nrofact: $('#txtNro').value.trim(), com_date: $('#txtFecha').value },
+                det: det.map(d => ({ mat_cod: d.mat_cod, dep_cod: d.dep_cod, cant: d.det_cant, precio: d.det_precio }))
+            };
+        }
+    });
+    Z.cargarCombo('#fSuc', 'cbo_suc_otras', {}, 'Esta Sucursal');
+})();
+</script>
+</body>
+</html>
