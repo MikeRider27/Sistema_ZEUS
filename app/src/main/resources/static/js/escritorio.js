@@ -62,7 +62,7 @@
         const el = document.createElement('div');
         el.className = 'iframe-win';
         const W = desk.clientWidth, H = desk.clientHeight;
-        const [w0, h0] = TAMANOS[url] || [980, 620];
+        const [w0, h0] = TAMANOS[url] || [1040, 700];
         const w = Math.min(w0, W - 10), h = Math.min(h0, H - 10);
         const off = (cascada++ % 8) * 24;
         el.style.width = w + 'px';

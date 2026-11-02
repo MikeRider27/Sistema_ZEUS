@@ -144,7 +144,7 @@
                 } else {
                     const v = r[col.c];
                     td.textContent = col.f ? FMT[col.f](v) : (v ?? '');
-                    if (col.c === 'est_cod') td.classList.add('est');
+                    if (col.c === 'est_cod') { td.classList.add('est'); td.dataset.est = v; }
                 }
                 tr.appendChild(td);
             });

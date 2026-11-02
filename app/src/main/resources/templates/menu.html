@@ -6,7 +6,7 @@
     <meta name="_csrf" th:content="${_csrf.token}">
     <meta name="_csrf_header" th:content="${_csrf.headerName}">
     <title th:text="|Sistema ZEUS - ONLINE - ${u.user}, ${u.suc}|">Sistema ZEUS</title>
-    <link rel="icon" href="/img/logo.png">
+    <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/css/zeus.css">
     <script src="/js/zeus.js"></script>
 </head>
@@ -29,6 +29,7 @@
 </th:block>
 
 <nav class="menubar">
+    <div class="marca-mini"><img src="/img/zeus-logo.svg" alt=""><b>ZEUS</b></div>
     <div class="m" th:each="m : ${menu}">
         <div class="m-titulo"><img th:src="|/img/${m.icono}.png|" alt=""><span th:text="${m.label}"></span></div>
         <div class="pop"><th:block th:replace="~{::items(${m.items})}"></th:block></div>
@@ -37,17 +38,19 @@
 
 <main class="desktop" id="desktop">
     <div class="marca">
+        <img src="/img/zeus-logo.svg" alt="">
         <h1>ZEUS</h1>
-        <p>Sistema de Gestión de Taller de Chapería y Pintura</p>
-        <p th:text="|${u.emp} - ${u.cargo}|"></p>
+        <div class="lema">Chapería &amp; Pintura</div>
+        <div class="franja"></div>
+        <p th:text="|Bienvenido/a, ${u.emp} - ${u.cargo}|"></p>
     </div>
 </main>
 
 <div class="taskbar" id="taskbar"></div>
 
 <footer class="statusbar">
-    <div th:text="|Usuario: ${u.user}|"></div>
-    <div th:text="|Sucursal: ${u.suc}|"></div>
+    <div>Usuario: <b th:text="${u.user}"></b></div>
+    <div>Sucursal: <b th:text="${u.suc}"></b></div>
     <div class="crece">No olvide cerrar los Formularios al dejar de utilizarlos</div>
     <div id="lblFecha"></div>
 </footer>
@@ -55,8 +58,8 @@
 <div class="bloqueo" id="bloqueo">
     <div class="login-win">
         <div class="t"><img src="/img/bloquear.png" alt=""> Bloqueo de Seguridad - Sistema ZEUS</div>
-        <div class="cuerpo">
-            <img class="logo" src="/img/logo_empresa.png" alt="">
+        <div class="cuerpo fila-logo">
+            <img class="logo" src="/img/zeus-logo.svg" alt="">
             <div style="flex:1">
                 <p th:text="|El sistema está bloqueado. Ingrese la contraseña de ${u.user} para continuar.|"></p>
                 <div class="form-grid una">
@@ -65,9 +68,9 @@
                 </div>
             </div>
         </div>
-        <div class="botonera" style="padding: 0 16px 14px">
+        <div class="botonera">
             <button type="button" class="btn" onclick="document.getElementById('frmLogout').submit()"><img src="/img/exit.png" alt="">Cerrar Sesión</button>
-            <button type="button" class="btn" id="btnDesbloquear"><img src="/img/sesion.png" alt="">Desbloquear</button>
+            <button type="button" class="btn primario" id="btnDesbloquear"><img src="/img/sesion.png" alt="">Desbloquear</button>
         </div>
     </div>
 </div>
